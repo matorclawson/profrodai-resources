@@ -29,6 +29,10 @@ do not add employer data, credentials, student records, or a live model/API.
 | Class 3 | [The harness at work](https://profrod.ai/courses/zeo-itam-autumn-2026/lesson/04-the-harness-at-work) | [03 harness verdict](labs/03-harness-verdict/PRACTICE.md) | A claimed result is held when its independent check disagrees. |
 | Class 4 | [Needle in Xolo's ledger](https://profrod.ai/courses/zeo-itam-autumn-2026/lesson/03-lab-the-needle-in-xolos-ledger) | [04 ledger investigation](labs/04-ledger-investigation/PRACTICE.md) | A transfer exercise: a bounded investigation names a missing receipt or duplicate record. |
 
+## Class notebook
+
+The 15 October class notebook (an always-on agent for Lucy's shop, run in Colab) is in [labs/05-always-on-agent](labs/05-always-on-agent/README.md). It is not one of the four offline practicals above and is not part of `make verify`.
+
 ## Prerequisites, runtime, safety, and cost
 
 Python 3.10+ and a terminal are enough. Every exercise is text/JSON, offline, free, synthetic,
