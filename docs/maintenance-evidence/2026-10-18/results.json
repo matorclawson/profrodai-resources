@@ -1,0 +1,159 @@
+[
+  {
+    "name": "tools",
+    "command": [
+      "/bin/sh",
+      "-c",
+      "node --version && npm --version && python3 --version && uv --version"
+    ],
+    "cwd": ".",
+    "started": "2026-10-18T16:10:30.936714+00:00",
+    "seconds": 0.24457029113546014,
+    "exit_code": 0,
+    "outputs": {
+      "tools.stdout": {
+        "bytes": 84,
+        "sha256": "24c74b42b375f526d71858cad932934d2ecf28dfa1e99701fbc5aeb373752d53"
+      },
+      "tools.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  {
+    "name": "npm-ci",
+    "command": [
+      "npm",
+      "ci",
+      "--ignore-scripts",
+      "--no-fund"
+    ],
+    "cwd": "courses/agentic-coding-with-cursor/order-api",
+    "started": "2026-10-18T16:10:31.182392+00:00",
+    "seconds": 1.2368605418596417,
+    "exit_code": 0,
+    "outputs": {
+      "npm-ci.stdout": {
+        "bytes": 77,
+        "sha256": "50e95ba805a01e9320eb6642b69592dc531fd0246af5e1916e4c829faaac3bd8"
+      },
+      "npm-ci.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  {
+    "name": "npm-audit",
+    "command": [
+      "npm",
+      "audit",
+      "--json"
+    ],
+    "cwd": "courses/agentic-coding-with-cursor/order-api",
+    "started": "2026-10-18T16:10:32.419949+00:00",
+    "seconds": 1.0161402919329703,
+    "exit_code": 0,
+    "outputs": {
+      "npm-audit.stdout": {
+        "bytes": 363,
+        "sha256": "59fc01cb711b8fa31096b70d4de3dcabeb7209e78dcae470b00a39d25ff61324"
+      },
+      "npm-audit.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  {
+    "name": "npm-outdated",
+    "command": [
+      "npm",
+      "outdated",
+      "--all",
+      "--json"
+    ],
+    "cwd": "courses/agentic-coding-with-cursor/order-api",
+    "started": "2026-10-18T16:10:33.437126+00:00",
+    "seconds": 2.820938125019893,
+    "exit_code": 1,
+    "outputs": {
+      "npm-outdated.stdout": {
+        "bytes": 37380,
+        "sha256": "379cf35721b3ea262ff9bfe678742e1db6b9b2df820e95c570e68753bffb0238"
+      },
+      "npm-outdated.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  {
+    "name": "npm-tests",
+    "command": [
+      "npm",
+      "test"
+    ],
+    "cwd": "courses/agentic-coding-with-cursor/order-api",
+    "started": "2026-10-18T16:10:36.258455+00:00",
+    "seconds": 1.1014956659637392,
+    "exit_code": 0,
+    "outputs": {
+      "npm-tests.stdout": {
+        "bytes": 369,
+        "sha256": "51cef0effa3c28a83a6b8dbb4daa9d4a087bd726770fd0091e5c21bf9d825a04"
+      },
+      "npm-tests.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  {
+    "name": "npm-typecheck",
+    "command": [
+      "npm",
+      "exec",
+      "--",
+      "tsc",
+      "--noEmit"
+    ],
+    "cwd": "courses/agentic-coding-with-cursor/order-api",
+    "started": "2026-10-18T16:10:37.360454+00:00",
+    "seconds": 1.357931082835421,
+    "exit_code": 0,
+    "outputs": {
+      "npm-typecheck.stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "npm-typecheck.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  {
+    "name": "python-lock-check",
+    "command": [
+      "uv",
+      "lock",
+      "--check"
+    ],
+    "cwd": "courses/sovereign-agent-book",
+    "started": "2026-10-18T16:10:38.719216+00:00",
+    "seconds": 0.1367992500308901,
+    "exit_code": 0,
+    "outputs": {
+      "python-lock-check.stdout": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "python-lock-check.stderr": {
+        "bytes": 51,
+        "sha256": "fb9f98a812331b4735cfad2ec736736ddba5ec727c67f0e8ead387cb47fb54bf"
+      }
+    }
+  }
+]
