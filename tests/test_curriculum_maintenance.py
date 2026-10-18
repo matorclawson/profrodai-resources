@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +70,44 @@ class CurriculumMaintenanceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaisesRegex(ValueError, "does not match cadence"):
                 MAINTENANCE.validate(self.write_policy(directory, policy), date(2026, 8, 27))
+
+    def test_review_evidence_resolves_to_an_existing_repository_file(self) -> None:
+        policy = self.policy()
+        policy["areas"][1]["review_evidence"] = "docs/review.md"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "docs/review.md").write_text("Actual dependency review evidence.\n")
+            with patch.object(MAINTENANCE, "ROOT", root):
+                self.assertEqual(5, len(MAINTENANCE.validate(self.write_policy(directory, policy), date(2026, 8, 27))))
+
+    def test_missing_review_evidence_does_not_qualify_a_date_change(self) -> None:
+        policy = self.policy()
+        policy["areas"][1]["review_evidence"] = "docs/missing.md"
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(MAINTENANCE, "ROOT", Path(directory)):
+                with self.assertRaisesRegex(ValueError, "maintenance evidence file missing"):
+                    MAINTENANCE.validate(self.write_policy(directory, policy), date(2026, 8, 27))
+
+    def test_review_evidence_cannot_point_outside_the_repository(self) -> None:
+        for reference in ("/tmp/review.md", "../review.md", ""):
+            with self.subTest(reference=reference), tempfile.TemporaryDirectory() as directory:
+                policy = self.policy()
+                policy["areas"][1]["review_evidence"] = reference
+                with self.assertRaisesRegex(ValueError, "maintenance evidence"):
+                    MAINTENANCE.validate(self.write_policy(directory, policy), date(2026, 8, 27))
+
+    def test_review_evidence_symlink_cannot_escape_the_repository(self) -> None:
+        policy = self.policy()
+        policy["areas"][1]["review_evidence"] = "review.md"
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
+            root = Path(directory)
+            target = Path(outside) / "review.md"
+            target.write_text("Outside the reviewed repository.\n")
+            (root / "review.md").symlink_to(target)
+            with patch.object(MAINTENANCE, "ROOT", root):
+                with self.assertRaisesRegex(ValueError, "maintenance evidence must stay within"):
+                    MAINTENANCE.validate(self.write_policy(directory, policy), date(2026, 8, 27))
 
     def test_broken_local_link_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
