@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import date, timedelta
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sys
 from typing import Any
 
@@ -34,8 +34,19 @@ def validate(policy_path: Path = DEFAULT_POLICY, today: date | None = None) -> l
     if not isinstance(areas, list) or {area.get("id") for area in areas if isinstance(area, dict)} != EXPECTED_AREAS:
         raise ValueError("maintenance policy must define the exact required areas")
     for area in areas:
-        if set(area) != {"id", "owner", "cadence_days", "last_reviewed", "next_due"}:
+        required_fields = {"id", "owner", "cadence_days", "last_reviewed", "next_due"}
+        if not required_fields <= set(area) <= required_fields | {"review_evidence"}:
             raise ValueError(f"maintenance area has unexpected fields: {area.get('id')}")
+        if "review_evidence" in area:
+            reference = area["review_evidence"]
+            if not isinstance(reference, str) or not reference.strip():
+                raise ValueError(f"maintenance evidence reference missing: {area['id']}")
+            relative = PurePosixPath(reference)
+            evidence = ROOT / relative
+            if relative.is_absolute() or ".." in relative.parts or not evidence.resolve().is_relative_to(ROOT.resolve()):
+                raise ValueError(f"maintenance evidence must stay within the repository: {area['id']}")
+            if not evidence.is_file():
+                raise ValueError(f"maintenance evidence file missing: {area['id']}: {reference}")
         if not isinstance(area["owner"], str) or not area["owner"].strip():
             raise ValueError(f"maintenance owner missing: {area['id']}")
         if not isinstance(area["cadence_days"], int) or area["cadence_days"] <= 0:

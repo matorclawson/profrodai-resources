@@ -21,3 +21,8 @@ These were overdue since 2026-09-27 and 2026-09-03, and `curriculum-maintenance`
 ### locked-dependencies (owner: maintainer)
 - `courses/sovereign-agent-book/uv.lock`: `uv lock --check` is current (51 packages, CPython 3.12.13).
 - `courses/agentic-coding-with-cursor/order-api/package-lock.json`: `npm audit` found 3 moderate advisories (express 4.22.2, body-parser 1.20.5–1.20.6, qs 2.2.5–6.15.3). `npm audit fix` resolved all three within the declared ranges, and the lockfile is updated. `npm audit` now reports 0, and the service's tests pass (5 of 5).
+
+## 2026-10-18: locked-dependencies (owner: maintainer)
+
+The overdue review was performed under the explicit amendment of profrod-SOW-338.
+[Commands, raw-output hashes, dependency-by-dependency decisions and limits](maintenance-evidence/2026-10-18.md) record the actual review. npm audit reports zero vulnerabilities, all five API tests and TypeScript pass, and `uv lock --check` passes using CPython 3.12.13. New releases were reviewed without changing either lockfile: retain the tested Express 4 / Node 24 / TypeScript 5 / Vitest 4 course baseline and the compatible Python graph, with no reported advisory requiring an emergency bump. Only this maintainer-owned review date is renewed to 2026-10-18, due 2026-10-25; this is not a claim that all dependencies are latest or that all notebooks have been executed.
