@@ -1,0 +1,159 @@
+[
+ {
+  "name": "tools",
+  "command": [
+   "/bin/sh",
+   "-c",
+   "node --version && npm --version && python3 --version && uv --version"
+  ],
+  "cwd": ".",
+  "started": "2026-10-27T19:22:21.811434+00:00",
+  "seconds": 0.08882308006286621,
+  "exit_code": 0,
+  "outputs": {
+   "tools.stdout": {
+    "bytes": 84,
+    "sha256": "24c74b42b375f526d71858cad932934d2ecf28dfa1e99701fbc5aeb373752d53"
+   },
+   "tools.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ {
+  "name": "npm-ci",
+  "command": [
+   "npm",
+   "ci",
+   "--ignore-scripts",
+   "--no-fund"
+  ],
+  "cwd": "courses/agentic-coding-with-cursor/order-api",
+  "started": "2026-10-27T19:22:21.900282+00:00",
+  "seconds": 0.6757428646087646,
+  "exit_code": 0,
+  "outputs": {
+   "npm-ci.stdout": {
+    "bytes": 80,
+    "sha256": "b4cfea06ce4ea13430ca11d928a52b0c7821153f6129e2327473105816bfa7b7"
+   },
+   "npm-ci.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ {
+  "name": "npm-audit",
+  "command": [
+   "npm",
+   "audit",
+   "--json"
+  ],
+  "cwd": "courses/agentic-coding-with-cursor/order-api",
+  "started": "2026-10-27T19:22:22.576056+00:00",
+  "seconds": 0.4265739917755127,
+  "exit_code": 0,
+  "outputs": {
+   "npm-audit.stdout": {
+    "bytes": 363,
+    "sha256": "59fc01cb711b8fa31096b70d4de3dcabeb7209e78dcae470b00a39d25ff61324"
+   },
+   "npm-audit.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ {
+  "name": "npm-outdated",
+  "command": [
+   "npm",
+   "outdated",
+   "--all",
+   "--json"
+  ],
+  "cwd": "courses/agentic-coding-with-cursor/order-api",
+  "started": "2026-10-27T19:22:23.002703+00:00",
+  "seconds": 1.3358230590820312,
+  "exit_code": 1,
+  "outputs": {
+   "npm-outdated.stdout": {
+    "bytes": 38843,
+    "sha256": "8bc48d622501ef3cd39a12dd2ea218b538c7da49bec439c9b8b7a93c26774c8e"
+   },
+   "npm-outdated.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ {
+  "name": "npm-tests",
+  "command": [
+   "npm",
+   "test"
+  ],
+  "cwd": "courses/agentic-coding-with-cursor/order-api",
+  "started": "2026-10-27T19:22:24.338554+00:00",
+  "seconds": 0.833406925201416,
+  "exit_code": 0,
+  "outputs": {
+   "npm-tests.stdout": {
+    "bytes": 430,
+    "sha256": "35c16fb01dcc08987c46a430f303c37cddcb1f70fc1c12a49519653383456081"
+   },
+   "npm-tests.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ {
+  "name": "npm-typecheck",
+  "command": [
+   "npm",
+   "exec",
+   "--",
+   "tsc",
+   "--noEmit"
+  ],
+  "cwd": "courses/agentic-coding-with-cursor/order-api",
+  "started": "2026-10-27T19:22:25.172000+00:00",
+  "seconds": 0.6480660438537598,
+  "exit_code": 0,
+  "outputs": {
+   "npm-typecheck.stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "npm-typecheck.stderr": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   }
+  }
+ },
+ {
+  "name": "python-lock-check",
+  "command": [
+   "uv",
+   "lock",
+   "--check"
+  ],
+  "cwd": "courses/sovereign-agent-book",
+  "started": "2026-10-27T19:22:25.820105+00:00",
+  "seconds": 0.06070876121520996,
+  "exit_code": 0,
+  "outputs": {
+   "python-lock-check.stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+   },
+   "python-lock-check.stderr": {
+    "bytes": 51,
+    "sha256": "4444f94dd4b84e6d40bfa886c99f697d6588079b4249e2ae932f01ca1dee01aa"
+   }
+  }
+ }
+]

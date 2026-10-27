@@ -1,0 +1,14 @@
+{
+ "sow": "profrod-ops-SOW-01",
+ "authorization": "architect ans_0e1e3fffeb2fe928 (qs 6.16.0 to 6.16.1 only, lockfile only); re-review required by the weekly cadence",
+ "source_head": "4b9c31719c18e88d2ea1b0439615025f4dfc8329",
+ "lockfiles_at_head": {
+  "courses/agentic-coding-with-cursor/order-api/package-lock.json": "56cdacf10bfbb106e2c527c6578b9791f3561f06605e2fef57d4ad3c1e49f03e",
+  "courses/sovereign-agent-book/uv.lock": "2477c56eaf221b354f26fe38dc002df6bf2047ac34c528fe2e69c70f2817d386"
+ },
+ "lockfiles_after_qs_bump_before_checks": {
+  "courses/agentic-coding-with-cursor/order-api/package-lock.json": "0b9da654ca399300099b2b0c8887cd147ad6cd67ecd202bb1ada8054eee50562",
+  "courses/sovereign-agent-book/uv.lock": "2477c56eaf221b354f26fe38dc002df6bf2047ac34c528fe2e69c70f2817d386"
+ },
+ "started": "2026-10-27T19:22:21.810979+00:00"
+}
