@@ -5,6 +5,7 @@
 Keys come from the environment (in Colab, from Secrets), never from a file in this folder.
 """
 import argparse
+import logging
 import os
 import time
 import tomllib
@@ -59,6 +60,7 @@ def main():
     parser.add_argument("--fake", action="store_true", help="scripted demo, no network")
     parser.add_argument("--config", default="business.toml")
     args = parser.parse_args()
+    logging.basicConfig(format="%(message)s", level=logging.INFO)
     with open(args.config, "rb") as handle:
         config = tomllib.load(handle)
     if args.fake:
