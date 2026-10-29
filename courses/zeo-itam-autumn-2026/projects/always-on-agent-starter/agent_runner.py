@@ -7,6 +7,10 @@ stay exactly as in Chapter 9.
 """
 
 
+import logging
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 HOLD = "I have asked the owner and will come back to you."
 REFUSE = "I can only help with this shop's orders and questions."
 
@@ -23,7 +27,7 @@ def make_run_claim(agent, decide=None):
             passed = label == "answer" and bool(answer)
         except Exception as error:  # a failed turn still ends, with a plain apology, so the queue never sticks
             answer, passed = "I could not answer that just now. Please send it again.", False
-            print("agent turn failed:", type(error).__name__)
+            log.warning("agent turn failed: %s", type(error).__name__)
         queue.finish(assignment, answer or "I have nothing to add.")
         return passed, None
 

@@ -4,6 +4,10 @@ Jev answers a typed question with a probability for each label. We never let a l
 below THRESHOLD the message goes to the owner. `client` is a `typesafe_sdk.TypeSafeClient(model="jev-latest")`
 in a real run (key TYPESAFE_API_KEY from Colab Secrets or the environment, never a file) and `FakeJev` in tests.
 """
+import logging
+
+log = logging.getLogger(__name__)
+log.addHandler(logging.NullHandler())
 LABELS = {
     "answer": "A customer question or order the agent can handle with the business's own facts and tools.",
     "ask_owner": "A request that needs the owner: spending, a promise, a refund, a complaint, or anything unclear.",
@@ -27,5 +31,5 @@ def decide(client, text, *, make_question=make_question, threshold=THRESHOLD):
             return "ask_owner", probabilities.get(label, 0.0)
         return label, probabilities[label]
     except Exception as error:
-        print("decision failed, asking the owner:", type(error).__name__)
+        log.warning("decision failed, asking the owner: %s", type(error).__name__)
         return "ask_owner", 0.0
