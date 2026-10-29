@@ -15,9 +15,9 @@ You write three small functions: `fixed_chunks`, `qa_records` and `tick_status`.
 ## What is real here
 
 - The text reading is live: Tesseract reads the six pages in your session, in English, Spanish and German. The numbers you see may differ a little from the class slides if Colab installs a different Tesseract version.
-- The survey, the respondents and every answer are fictional. The handwriting-like marks are drawn with two embedded fonts, Caveat and Reenie Beanie, both under the SIL Open Font License 1.1. The license texts are inside the notebook. The pages teach document structure and controlled failures. They do not measure how well any system reads real handwriting.
+- The survey, the respondents and every answer are fictional. The handwriting-like marks are drawn with two fonts, Caveat and Reenie Beanie, both under the SIL Open Font License 1.1. The notebook fetches both from one pinned commit of github.com/google/fonts, checks each file against its sha256 and refuses a file that differs; the license texts come with them. The pages teach document structure and controlled failures. They do not measure how well any system reads real handwriting.
 - The assistant is a small rule based program with real local tools. It is not a language model. An optional extension at the end lets Jev propose the next tool through your own key, added as a Colab Secret named `TYPESAFE_API_KEY`. It is off by default, the notebook contains no key, and a hosted service may incur charges.
-- The core survey assets are inside the notebook. The setup cell needs Internet for packages and language data. The optional Docling and PaddleOCR extensions install their own packages and download their models separately, in their own cells, and are off by default.
+- The survey pages are drawn by the notebook itself. Setup is seven short cells that each print what they did and how many seconds it took; it needs Internet for the Tesseract and pypdf packages, the language data and the two fonts. The optional Docling and PaddleOCR extensions install their own packages and download their models separately, in their own cells, and are off by default.
 
 ## Checks and limits
 
