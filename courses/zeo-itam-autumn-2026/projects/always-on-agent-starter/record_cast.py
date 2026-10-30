@@ -17,7 +17,7 @@ import time
 def record(path, command, width=100, height=28):
     started = time.time()
     header = {"version": 2, "width": width, "height": height, "timestamp": int(started),
-              "title": " ".join(command), "env": {"SHELL": "/bin/sh", "TERM": "xterm-256color"}}
+              "title": "SIMULATION with a fake messenger and a fake hosted agent: " + " ".join(command), "env": {"SHELL": "/bin/sh", "TERM": "xterm-256color"}}
     pid, fd = pty.fork()
     if pid == 0:
         os.environ.update(COLUMNS=str(width), LINES=str(height), TERM="xterm-256color", PYTHONUNBUFFERED="1")
