@@ -6,7 +6,7 @@ Run everything from this folder. The code in `book/` is copied unchanged from th
 
 ## What you need
 
-Python 3.11 or newer and the `pydantic` package (version 2). Google Colab already has both. On your own computer, run `pip install pydantic` once. The starter needs nothing else for the tests and the fake demo.
+Python 3.11 or newer and Pydantic 2. On your own computer, run `python3 -m pip install "pydantic>=2,<3"` once, with the same `python3` you will use for the tests. In Colab, run the setup cell in the notebook before the tests. The install needs internet. After it, the tests and the fake demo need no keys and no network.
 
 ## Try it with no keys and no network
 
