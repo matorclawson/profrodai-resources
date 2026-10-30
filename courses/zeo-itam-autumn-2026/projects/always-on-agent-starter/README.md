@@ -4,7 +4,11 @@ A small agent that runs all day for one business and talks to its customers and 
 
 Run everything from this folder. The code in `book/` is copied unchanged from the course book; see `PROVENANCE.md`.
 
-## Try it with nothing installed and no keys
+## What you need
+
+Python 3.11 or newer and the `pydantic` package (version 2). Google Colab already has both. On your own computer, run `pip install pydantic` once. The starter needs nothing else for the tests and the fake demo.
+
+## Try it with no keys and no network
 
     python3 run.py --fake
 
