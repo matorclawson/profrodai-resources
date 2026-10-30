@@ -1,6 +1,8 @@
 """Offline checks for the starter. No network, no key. Run from this folder: python3 -m unittest -v"""
 import json
 import os
+import subprocess
+import sys
 import runpy
 import tempfile
 import unittest
@@ -177,6 +179,27 @@ class AgentsApiSession(unittest.TestCase):
         self.assertEqual(calls, [])
         result = self.client.beta.agents.sessions.data["sess_1"]["results"][0]
         self.assertFalse(result["success"])
+
+
+class DemoScenes(unittest.TestCase):
+    def scene(self, number):
+        return subprocess.run([sys.executable, "demo_scenes.py", str(number)], capture_output=True, text=True, timeout=60, env=dict(os.environ, PYTHONPATH=os.getcwd()))
+
+    def test_the_same_message_twice_scene_shows_one_job_and_one_reply(self):
+        out = self.scene(3)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("jobs in the queue: 1   replies sent: 1", out.stdout)
+
+    def test_the_spending_scene_shows_no_order(self):
+        out = self.scene(5)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("orders placed: 0", out.stdout)
+
+    def test_the_kill_scene_recovers_the_orphaned_work(self):
+        out = self.scene(4)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("recovered work ids: [1]", out.stdout)
+        self.assertIn("state after recovery: [('finished', 1)]", out.stdout)
 
 
 class SecretsScan(unittest.TestCase):
