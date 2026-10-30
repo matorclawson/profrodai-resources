@@ -44,8 +44,8 @@ def build(config, bot, agent_client, jev, now, make_question=decision.make_quest
     return db, queue, enrollment, wrapped, agent
 
 
-def one_round(config, db, queue, enrollment, bot):
-    WAKE["tick"](db, queue, now=time.time())
+def one_round(config, db, queue, enrollment, bot, now=None):
+    WAKE["tick"](db, queue, now=time.time() if now is None else now)
     operators = frozenset({config["owner_telegram_id"]}) | enrollment.customers()
     return CHANNEL["serve"](db, queue, bot, operators, lambda: None, rounds=1)
 

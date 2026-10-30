@@ -36,7 +36,7 @@ The tests use a fake messenger and a fake Agents API, so they pass offline.
 1. Create your own bot: in Telegram open @BotFather, send `/newbot`, follow the steps, and copy the token. The token is a password.
 2. Put the token in the environment as `TELEGRAM_BOT_TOKEN`. In Colab use the Secrets panel. Never put it in a file, a notebook cell or a screenshot. Do the same with `OPENAI_API_KEY` and `TYPESAFE_API_KEY`.
 3. Edit `business.toml`: your numeric Telegram id as `owner_telegram_id`, and your own `join_code`.
-4. Start it: `python3 run.py`. Send `/start` to your bot from your own account, then message it.
+4. Start it: `python3 run.py`. You are the owner, so you need no code: from your own Telegram account send `/start` to your bot once (Telegram only lets a bot write to you after that), then message it normally. To try the customer path, use a second account or a classmate: they send `/start` followed by your join code, for example `/start ICE-CREAM-42`, and then message the bot.
 5. Before you hand in, run `python3 scan_secrets.py .` and fix anything it reports.
 
 ## Must-nots

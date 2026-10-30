@@ -182,6 +182,17 @@ class AgentsApiSession(unittest.TestCase):
 
 
 class DemoScenes(unittest.TestCase):
+    def test_the_startup_scene_runs_the_morning_job_and_the_owner_gets_the_message(self):
+        out = self.scene(1)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("agent -> 1001  :  Morning check: vanilla and strawberry are low. Order more?", out.stdout)
+
+    def test_the_message_scene_refuses_the_hostile_message_before_the_agent_sees_it(self):
+        out = self.scene(2)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("I can only help with this shop's orders and questions.", out.stdout)
+        self.assertIn("messages that reached the hosted agent: 1 ", out.stdout)
+
     def scene(self, number):
         return subprocess.run([sys.executable, "demo_scenes.py", str(number)], capture_output=True, text=True, timeout=60, env=dict(os.environ, PYTHONPATH=os.getcwd()))
 
