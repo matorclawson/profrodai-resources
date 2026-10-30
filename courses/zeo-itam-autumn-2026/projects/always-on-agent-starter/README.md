@@ -21,7 +21,7 @@ The tests use a fake messenger and a fake Agents API, so they pass offline.
 | Message in, reply out, one job per message, a lost reply never sent twice | `book/` (the channel and queue) | Chapters 8 and 9 |
 | Customers join with `/start CODE`; strangers and groups are ignored | `enroll.py` | Chapter 9 |
 | One hosted Agents API session per conversation, kept across restarts; it takes the place of Chapter 3's local loop | `agent_session.py`, `agent_runner.py` | Chapter 3 (replaced here) |
-| Jev decides: answer, ask the owner, or refuse; below 70% confidence the owner decides | `decision.py` | Lab 05 (the confidence gate) |
+| Jev decides: answer, ask the owner, or refuse. When it says ask the owner, or is less than 70% sure, the owner receives the customer's message in their own chat, once; if the owner cannot be reached the customer is told so | `decision.py`, `agent_runner.py` | Lab 05 (the confidence gate) |
 | A daily job at a clock time (UTC), once per day, survives a restart | `schedule_daily.py` | Chapter 10 |
 | Spending needs the owner: the `place_order` tool never runs on the model's say-so | `agent_session.py` (`ask_first`) | Chapter 11 |
 | Check for secrets before you share anything | `scan_secrets.py` | |

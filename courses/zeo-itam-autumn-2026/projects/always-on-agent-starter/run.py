@@ -36,7 +36,8 @@ def build(config, bot, agent_client, jev, now, make_question=decision.make_quest
     agent = AgentSession(
         agent_client, config["sessions"], model=config["model"], instructions=config["instructions"],
         tools=TOOL_SPECS, handlers={"stock": lambda: WAKE["stock_rows"](db.connection)}, ask_first=["place_order"])
-    agent_runner.install(CHANNEL, agent, decide=lambda text: decision.decide(jev, text, make_question=make_question)[0])
+    owner_route = ("telegram:" + bot.account, str(config["owner_telegram_id"])) if config["owner_telegram_id"] > 0 else None
+    agent_runner.install(CHANNEL, agent, decide=lambda text: decision.decide(jev, text, make_question=make_question)[0], owner_route=owner_route)
     schedule_daily.schedule_daily(
         db, "morning-check", "owner-morning", "Check the stock and tell the owner what to order.", config["morning_check"],
         now=now, channel="telegram:" + bot.account, recipient=str(config["owner_telegram_id"]))

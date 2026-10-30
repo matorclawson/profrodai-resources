@@ -42,7 +42,8 @@ def make(folder, script, bot=None, ask_first=("place_order",)):
                          ask_first=ask_first, sleep=lambda s: None)
     run.schedule_daily.schedule_daily(db, "morning-check", "owner-morning", "Check the stock and tell the owner what to order.",
                                       config["morning_check"], now=time.time(), channel="telegram:" + bot.account, recipient=str(OWNER))
-    run.agent_runner.install(run.CHANNEL, agent, decide=lambda t: decision.decide(JEV, t, make_question=lambda: {})[0])
+    run.agent_runner.install(run.CHANNEL, agent, decide=lambda t: decision.decide(JEV, t, make_question=lambda: {})[0],
+                             owner_route=("telegram:" + bot.account, str(OWNER)))
     return config, db, queue, enrollment, wrapped, bot, agent
 
 
