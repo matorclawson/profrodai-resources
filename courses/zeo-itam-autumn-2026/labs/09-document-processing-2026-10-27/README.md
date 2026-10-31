@@ -12,4 +12,6 @@ Three notebooks for the ITAM class of 27 October 2026, all about the same made-u
 
 The Colab links are added here when this folder is merged, pinned to the merge commit.
 
+None of the three notebooks has been run in Colab yet. If a cell fails there, tell the instructor which one.
+
 Two cells in the class notebook that call a hosted model replay saved answers, because they need keys that students do not have.
