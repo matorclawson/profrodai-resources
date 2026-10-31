@@ -1,0 +1,11 @@
+# Your business. Edit this file; it holds no secrets (tokens and keys come from the environment).
+name = "Lucy's ice cream shop"
+owner_telegram_id = 0          # your own numeric Telegram id (ask @userinfobot), set before a real run
+join_code = "CHANGE-ME"        # customers send /start <join_code> to join; change it
+welcome = "You are connected. Send me your order."
+database = "agent.db"
+enrolled = "enrolled.db"
+sessions = "sessions.db"
+morning_check = "08:00"        # UTC, every day: the agent checks stock and messages the owner
+model = "gpt-6-astra"
+instructions = "You run Lucy's ice cream shop for its customers and its owner. Be brief. Use the stock tool for facts. Never spend money: ask the owner."
