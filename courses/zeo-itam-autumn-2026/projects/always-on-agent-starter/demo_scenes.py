@@ -160,7 +160,7 @@ def scene5(folder):
     show_replies(fake)
     sessions = agent.client.beta.agents.sessions
     result = [r for s in sessions.data.values() for r in s["results"]][0]
-    say("the model asked for place_order; success=%s; our reply to the model: %s" % (result["success"], result["output"]))
+    say("the model asked for place_order; success=%s; our reply to the model: %s" % (result["success"], result.get("output") or result["error"]))
     say("orders placed: 0")
 
 

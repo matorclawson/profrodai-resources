@@ -48,6 +48,9 @@ class EnrollBot:
         kept = []
         for update in result:
             if self._join(update.get("message")):
+                # Keep the id, drop the content: the channel code then moves its cursor past the join message.
+                if type(update.get("update_id")) is int and update["update_id"] >= 0:
+                    kept.append({"update_id": update["update_id"]})
                 continue
             kept.append(update)
         return kept

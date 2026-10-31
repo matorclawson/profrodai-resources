@@ -27,7 +27,7 @@ The tests use a fake messenger and a fake Agents API, so they pass offline.
 | One hosted Agents API session per conversation, kept across restarts; it takes the place of Chapter 3's local loop | `agent_session.py`, `agent_runner.py` | Chapter 3 (replaced here) |
 | Jev decides: answer, ask the owner, or refuse. When it says ask the owner, or is less than 70% sure, the owner receives the customer's message in their own chat, once; if the owner cannot be reached the customer is told so | `decision.py`, `agent_runner.py` | Lab 05 (the confidence gate) |
 | A daily job at a clock time (UTC), once per day, survives a restart | `schedule_daily.py` | Chapter 10 |
-| Spending needs the owner: the `place_order` tool never runs on the model's say-so | `agent_session.py` (`ask_first`) | Chapter 11 |
+| Spending is refused: the `place_order` tool never runs on the model's say-so, and this starter has no approval step that would run it (your project adds one) | `agent_session.py` (`ask_first`) | Chapter 11 |
 | Check for secrets before you share anything | `scan_secrets.py` | |
 | Review a classmate's project and combine the scores | `peer_review.py` | |
 
@@ -38,6 +38,12 @@ The tests use a fake messenger and a fake Agents API, so they pass offline.
 3. Edit `business.toml`: your numeric Telegram id as `owner_telegram_id`, and your own `join_code`.
 4. Start it: `python3 run.py`. You are the owner, so you need no code: from your own Telegram account send `/start` to your bot once (Telegram only lets a bot write to you after that), then message it normally. To try the customer path, use a second account or a classmate: they send `/start` followed by your join code, for example `/start ICE-CREAM-42`, and then message the bot.
 5. Before you hand in, run `python3 scan_secrets.py .` and fix anything it reports.
+
+## Two limits to know about
+
+The starter refuses every spend. `place_order` is listed so you can see the refusal, but no handler exists, so nothing is ever ordered. Adding the owner's approval is part of your project (Chapter 11).
+
+When a customer's message goes to the owner, the customer is told "I have passed this to the owner." before the starter knows the owner received it, and the owner's reply goes to the owner's own conversation, not back to the customer. A customer has no way to get the owner's answer through this starter. If the owner has never sent `/start` to the bot, Telegram will not deliver the message at all.
 
 ## Must-nots
 

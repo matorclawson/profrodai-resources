@@ -34,15 +34,26 @@ def escalate(db, queue, assignment, owner_route):
     return work is not None
 
 
+def is_customer(session_id, owner_id):
+    """True for a customer's chat. The owner's own chat and the scheduled sessions are not customers.
+    The session id ends with the Telegram id of the sender, which Telegram sets and a customer cannot choose."""
+    if owner_id is None:
+        return True
+    who = session_id.rsplit(":", 1)[-1]
+    return who.isdigit() and who != owner_id
+
+
 def make_run_claim(agent, decide=None, owner_route=None):
     """`decide(text)` returns answer, ask_owner or refuse (see decision.py); None means always answer.
+    Only a customer's message goes through `decide`: the owner's chat and the scheduled sessions go straight to the agent.
     `owner_route` is (channel, owner chat id as text); None means the owner cannot be reached."""
+    owner_id = owner_route[1] if owner_route else None
     def run_claim(db, queue, assignment, model):
         if assignment.session_id == ESCALATION_SESSION:  # made by this file, never by a customer: send the text as it is
             queue.finish(assignment, assignment.text)
             return True, None
         try:
-            label = decide(assignment.text) if decide else "answer"
+            label = decide(assignment.text) if decide and is_customer(assignment.session_id, owner_id) else "answer"
             if label == "answer":
                 answer = agent.reply(assignment.session_id, assignment.text)
             elif label == "ask_owner":

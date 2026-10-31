@@ -31,11 +31,18 @@ def assign(students):
 def combine(rows):
     """rows: (author, reviewer, total out of 20). Returns {author: {...}} with the final percentage.
     Peer score is the median of the peers' totals, so one outlier cannot move it. With fewer than 2 peer
-    reviews the project is marked `needs_instructor`."""
-    peers, instructor = {}, {}
+    reviews the final percentage is the instructor's score alone, and a project with no instructor row is marked
+    `needs_instructor`. A row where a student reviews their own project, or a second row from the same reviewer
+    for the same project, is refused, because these scores make up the whole grade."""
+    peers, instructor, seen = {}, {}, set()
     for author, reviewer, total in rows:
         if not 0 <= total <= RUBRIC_TOTAL:
             raise ValueError("score out of range")
+        if author == reviewer:
+            raise ValueError("a student cannot review their own project")
+        if (author, reviewer) in seen:
+            raise ValueError("a reviewer can score a project only once")
+        seen.add((author, reviewer))
         (instructor if reviewer == "instructor" else peers).setdefault(author, []).append(total)
     result = {}
     for author in sorted(set(peers) | set(instructor)):

@@ -17,6 +17,7 @@ class _Obj:
 class FakeAgentsClient:
     def __init__(self, script):
         self.script, self.sessions_made, self._ids = script, [], itertools.count(1)
+        self.item_ids = itertools.count(1)
         self.beta = _Obj(agents=_Obj(sessions=_Sessions(self)))
 
 
@@ -44,7 +45,7 @@ class _Sessions:
             self._say(sid, step[1])
 
     def _say(self, sid, text):
-        self.data[sid]["items"].append(_Obj(type="message", role="assistant", phase="final_answer",
+        self.data[sid]["items"].append(_Obj(id="item_%d" % next(self.owner.item_ids), type="message", role="assistant", phase="final_answer",
                                             content=[{"type": "output_text", "text": text}]))
 
     def _event(self, sid, *, events):
@@ -52,6 +53,9 @@ class _Sessions:
             if e["type"] == "agent.session.input.message":
                 self._turn(sid, e["input"][0]["content"][0]["text"])
             elif e["type"] == "agent.session.input.tool_result":
+                # like the service: output carries a success, error carries a failure
+                if ("output" in e) != bool(e["success"]) or ("error" in e) == bool(e["success"]):
+                    raise ValueError("a tool result carries output when it succeeded and error when it failed")
                 s = self.data[sid]
                 s["results"].append(e)
                 s["pending"] = []
@@ -62,8 +66,12 @@ class _Sessions:
         return _Obj(status="requires_action" if s["pending"] else "idle",
                     required_actions=[_Obj(**p) for p in s["pending"]] or None)
 
-    def _items(self, sid, **kw):
-        return _Obj(data=list(self.data[sid]["items"]))
+    def _items(self, sid, order="asc", limit=100, **kw):
+        """Like the service: one page of at most `limit` items, oldest first or newest first."""
+        if not 1 <= limit <= 100:
+            raise ValueError("limit is 1 to 100")
+        items = list(self.data[sid]["items"])
+        return _Obj(data=(items[::-1] if order == "desc" else items)[:limit])
 
 
 class FakeJev:
