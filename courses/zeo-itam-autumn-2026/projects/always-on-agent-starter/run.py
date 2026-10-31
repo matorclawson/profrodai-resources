@@ -51,9 +51,13 @@ def one_round(config, db, queue, enrollment, bot, now=None):
 
 
 def real_clients():
+    keys = {name: CHANNEL["secret"](name) for name in ("OPENAI_API_KEY", "TYPESAFE_API_KEY")}
+    missing = [name for name, value in keys.items() if not value]
+    if missing:
+        raise SystemExit("Missing key: " + ", ".join(missing) + ". Bring your own and set it in Colab Secrets or the environment (never in a file).")
     from openai import OpenAI
     from typesafe_sdk import TypeSafeClient
-    return OpenAI(api_key=CHANNEL["secret"]("OPENAI_API_KEY")), TypeSafeClient(model="jev-latest", api_key=CHANNEL["secret"]("TYPESAFE_API_KEY"))
+    return OpenAI(api_key=keys["OPENAI_API_KEY"]), TypeSafeClient(model="jev-latest", api_key=keys["TYPESAFE_API_KEY"])
 
 
 def main():
