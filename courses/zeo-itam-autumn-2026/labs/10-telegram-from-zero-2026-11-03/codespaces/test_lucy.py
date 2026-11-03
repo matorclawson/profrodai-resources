@@ -128,6 +128,49 @@ class LucyTests(unittest.TestCase):
         self.say(OWNER, "yes go ahead")
         self.assertEqual(self.status(), ["APPROVED"])
 
+    def test_a_new_proposal_revokes_the_older_one_and_a_yes_reaches_only_the_newest(self):
+        self.say(OWNER, "propose vanilla")
+        first = self.latest_id()
+        self.say(OWNER, "propose vanilla again")
+        statuses = dict(self.lucy.db.connection.execute("SELECT id, status FROM assistant_orders").fetchall())
+        second = self.latest_id()
+        self.assertNotEqual(first, second)
+        self.assertEqual(statuses[first], "REVOKED")
+        self.say(OWNER, "yes go ahead")
+        statuses = dict(self.lucy.db.connection.execute("SELECT id, status FROM assistant_orders").fetchall())
+        self.assertEqual(statuses[second], "APPROVED")
+        self.assertEqual(statuses[first], "REVOKED")
+
+    def test_the_model_cannot_approve_an_id_that_was_not_the_one_shown(self):
+        self.say(OWNER, "propose vanilla")
+        shown = self.latest_id()
+        class Owner:
+            session_id, text = "telegram:1234:%d" % OWNER, "yes go ahead"
+        self.lucy.assignment = Owner()
+        reply = self.lucy.approve_restock("0" * 32)
+        self.assertIn("not the proposal shown", reply)
+        self.assertEqual(self.status(), ["DRAFT"])
+        self.assertIn(shown, reply)
+
+    def test_a_yes_with_nothing_waiting_approves_nothing(self):
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), [])
+        self.assertTrue(any("Nothing is waiting" in str(r) for r in self.tool_results()))
+
+    def test_one_yes_is_used_up(self):
+        self.say(OWNER, "propose vanilla")
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["APPROVED"])
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["APPROVED"])
+        self.assertTrue(any("Nothing is waiting" in str(r) for r in self.tool_results()))
+
+    def test_the_waiting_proposal_survives_a_restart(self):
+        self.say(OWNER, "propose vanilla")
+        self.build()
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["APPROVED"])
+
     def test_an_unclear_answer_does_not_approve(self):
         self.say(OWNER, "propose vanilla")
         self.say(OWNER, "maybe later")

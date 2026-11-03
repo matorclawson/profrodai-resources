@@ -89,6 +89,8 @@ class Lucy:
         wake["seed_shop"](self.db)
         self.db.migrate("orders", parts["approval"]["ORDER_MIGRATIONS"])
         self.db.connection.row_factory = parts["approval"]["named_rows"]
+        with self.db.immediate() as connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL)")
         self.enrollment = parts["Enrollment"](str(data / "enrolled.db"))
         self.wrapped = parts["EnrollBot"](bot, self.enrollment, config["join_code"], config["welcome"])
         self.assignment = None
@@ -130,18 +132,36 @@ class Lucy:
         ch11 = self.p["approval"]
         ch11["hold"](self.db, self.assignment)
         proposal_id = ch11["propose"](self.db, self.assignment, sku, int(quantity))
-        row = self.db.connection.execute("SELECT proposal, amount, status FROM assistant_orders WHERE id=?", (proposal_id,)).fetchone()
+        row = self.db.connection.execute("SELECT proposal, amount, status, digest FROM assistant_orders WHERE id=?", (proposal_id,)).fetchone()
+        chat = self.assignment.session_id
+        self._supersede(chat, proposal_id)
+        with self.db.immediate() as connection:
+            connection.execute("INSERT OR REPLACE INTO lucy_pending VALUES (?,?,?)", (chat, proposal_id, row["digest"]))
         proposal = json.loads(row["proposal"])
         log.info("owner proposal drafted for %s x %s", proposal["sku"], proposal["quantity"])
         return {"proposal_id": proposal_id, "sku": proposal["sku"], "quantity": proposal["quantity"], "total_cents": row["amount"],
                 "status": row["status"], "next": "Tell the owner the exact proposal and ask for a clear yes. Nothing is ordered."}
 
+    def _supersede(self, chat, new_id):
+        """Only the proposal just shown can be approved. An older open one is revoked, so a later yes cannot reach it."""
+        old = self.db.connection.execute("SELECT proposal_id FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
+        if old and old["proposal_id"] != new_id:
+            ch11 = self.p["approval"]
+            policy = ch11["SpendingPolicy"](operators=frozenset({str(self.owner_id)}))
+            ch11["revoke"](self.db, old["proposal_id"], actor=str(self.owner_id), policy=policy)
+
     def approve_restock(self, proposal_id):
         if self.assignment is None or not self.is_owner(self.assignment):
             return OWNER_ONLY
         connection = self.db.connection
+        chat = self.assignment.session_id
+        pending = connection.execute("SELECT proposal_id, digest FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
+        if pending is None:
+            return "Nothing is waiting for the owner's yes. Ask for a proposal first."
+        if proposal_id != pending["proposal_id"]:
+            return "Not approved: that is not the proposal shown to the owner. The proposal waiting is " + pending["proposal_id"] + "."
         order = connection.execute("SELECT id, proposal, digest, status FROM assistant_orders WHERE id=?", (proposal_id,)).fetchone()
-        if order is None or order["status"] not in ("DRAFT", "APPROVED"):
+        if order is None or order["digest"] != pending["digest"] or order["status"] != "DRAFT":
             return "No open proposal with that id."
         text = self.assignment.text  # the owner's real message, taken from the queue, not from the model
         label, probability = approval_label(self.jev, text, order["proposal"], make_question=self.approval_question)
@@ -151,6 +171,8 @@ class Lucy:
         ch11 = self.p["approval"]
         policy = ch11["SpendingPolicy"](operators=frozenset({str(self.owner_id)}))
         ch11["approve"](self.db, order["id"], order["digest"], actor=str(self.owner_id), policy=policy, expires=self.now() + 3600)
+        with self.db.immediate() as connection:  # the yes is used up: a second yes cannot approve anything else
+            connection.execute("DELETE FROM lucy_pending WHERE chat=?", (chat,))
         return "Approved and recorded for one hour. Nothing is ordered: this lab never sends an order to a supplier."
 
     def one_round(self):

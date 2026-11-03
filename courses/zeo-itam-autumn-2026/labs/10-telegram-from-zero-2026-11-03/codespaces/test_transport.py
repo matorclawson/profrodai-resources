@@ -110,17 +110,52 @@ class LabTests(unittest.TestCase):
         out = self.run_step("step07_read.py")
         self.assertIn("Received: Hello Lucy!", out.stdout)
 
-    def test_find_my_id_saves_the_sender_in_business_toml(self):
-        self.fake.push("hola", user=4242, chat=4242)
+    def pair(self, *args):
         import shutil
-        shutil.copy(os.path.join(HERE, "business.toml"), os.path.join(self.dir, "business.toml"))
-        out = self.run_step("find_my_id.py")
-        with open(os.path.join(self.dir, "business.toml")) as handle:
-            self.assertIn("owner_telegram_id = 4242", handle.read())
-        self.assertIn("Saved it in business.toml", out.stdout)
+        if not os.path.exists(os.path.join(self.dir, "business.toml")):
+            shutil.copy(os.path.join(HERE, "business.toml"), os.path.join(self.dir, "business.toml"))
+        return self.run_step("find_my_id.py", *args)
 
-    def test_find_my_id_without_a_message_says_what_to_do(self):
-        self.assertIn("Send any message to your bot", self.run_step("find_my_id.py").stderr)
+    def owner_in_file(self):
+        with open(os.path.join(self.dir, "business.toml")) as handle:
+            return handle.read()
+
+    def test_find_my_id_takes_the_sender_of_the_pairing_message(self):
+        self.fake.push("hola", user=9999, chat=9999)
+        self.fake.push("owner secretword", user=4242, chat=4242)
+        out = self.pair("secretword")
+        self.assertIn("owner_telegram_id = 4242", self.owner_in_file())
+        self.assertIn("Saved your Telegram number", out.stdout)
+        self.assertNotIn("4242", out.stdout + out.stderr)
+
+    def test_find_my_id_ignores_messages_without_the_word_and_a_wrong_word(self):
+        self.fake.push("owner otherword", user=5555, chat=5555)
+        self.fake.push("hola", user=4242, chat=4242)
+        out = self.pair("secretword")
+        self.assertIn("No message 'owner <your word>' found", out.stderr)
+        self.assertIn("owner_telegram_id = 0", self.owner_in_file())
+
+    def test_find_my_id_never_replaces_an_owner_without_replace(self):
+        self.pair("secretword")  # creates the file; no message yet
+        path = os.path.join(self.dir, "business.toml")
+        text = open(path).read().replace("owner_telegram_id = 0", "owner_telegram_id = 1111")
+        open(path, "w").write(text)
+        self.fake.push("owner secretword", user=4242, chat=4242)
+        out = self.pair("secretword")
+        self.assertIn("already has an owner", out.stderr)
+        self.assertIn("owner_telegram_id = 1111", self.owner_in_file())
+        self.pair("secretword", "--replace")
+        self.assertIn("owner_telegram_id = 4242", self.owner_in_file())
+
+    def test_find_my_id_refuses_when_two_people_send_the_word(self):
+        self.fake.push("owner secretword", user=4242, chat=4242)
+        self.fake.push("owner secretword", user=7777, chat=7777)
+        out = self.pair("secretword")
+        self.assertIn("More than one person", out.stderr)
+        self.assertIn("owner_telegram_id = 0", self.owner_in_file())
+
+    def test_find_my_id_needs_a_word(self):
+        self.assertIn("Usage: python3 find_my_id.py", self.pair().stderr)
 
     def test_a_rejected_token_is_explained_without_printing_it(self):
         self.fake.fail_next.append(401)
