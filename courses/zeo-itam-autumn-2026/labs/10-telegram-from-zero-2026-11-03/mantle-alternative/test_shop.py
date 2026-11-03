@@ -44,6 +44,15 @@ class ShelfTests(unittest.TestCase):
         self.assertEqual(shop.restock_reply(shop.OWNER_PIN, "vanilla"), "Propose 6 tubs")
         self.assertEqual(shop.restock_reply("1234", "vanilla"), "Owner only")
 
+    def test_spoken_pin_from_voice_works(self):
+        self.assertEqual(shop.restock_reply("one two three four", "vanilla"), "Propose 6 tubs")
+        self.assertEqual(shop.restock_reply("one, two, three, four", "vanilla"), "Propose 6 tubs")
+
+    def test_spoken_wrong_or_partial_pin_is_refused(self):
+        self.assertEqual(shop.restock_reply("one two three five", "vanilla"), "Owner only")
+        self.assertEqual(shop.restock_reply("one two three", "vanilla"), "Owner only")
+        self.assertEqual(shop.restock_reply("my pin is one two three four", "vanilla"), "Owner only")
+
     def test_proposal_never_below_zero(self):
         shop.INVENTORY["vanilla"] = 11
         self.assertEqual(shop.restock_reply("1234", "vanilla"), "Propose 0 tubs")

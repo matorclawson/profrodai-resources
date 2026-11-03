@@ -26,7 +26,7 @@ When it is ready, open a terminal and run `bash run.sh`. It runs the offline tes
 
 ## Who is Lucy
 
-The agent does not believe anyone who types "I am Lucy". The restock tool checks a shop PIN in Python code, outside the chat model. Say it like this: "Restock vanilla, PIN 4242" (use your own PIN). A wrong or missing PIN gets "Owner only", and the tool never repeats the PIN.
+The agent does not believe anyone who types "I am Lucy". The restock tool checks a shop PIN in Python code, outside the chat model. Say it like this: "Restock vanilla, PIN 4242" (use your own PIN). A wrong or missing PIN gets "Owner only", and the tool never repeats the PIN. By voice, the PIN can arrive as spoken digits ("four two four two"); the shop file turns a run of digit words into the number before it checks.
 
 Be clear with your class about what this shows. It teaches the idea that a permission lives in code, not in the conversation. It is not a login: anyone who learns the PIN is Lucy, and Inspector browser tabs are separate conversations, not verified people. The Telegram notebook checks Telegram's sender field instead, which a customer cannot type.
 
