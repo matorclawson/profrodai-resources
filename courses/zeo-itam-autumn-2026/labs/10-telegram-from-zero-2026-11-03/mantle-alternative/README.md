@@ -34,6 +34,7 @@ Be clear with your class about what this shows. It teaches the idea that a permi
 
 - `shop.py`: the shelf and the two answers. Plain Python, no Rasa.
 - `test_shop.py`: nine offline tests of the sequence above. Run `python3 -m unittest test_shop`.
+- `run.sh`, `check_launcher.sh`: the launcher stops if a shelf test fails; the check proves it offline with dummy values.
 - `agent.yml`, `integrations.yml`: the agent, the model and the voice settings.
 - `skills/check_stock`, `skills/propose_restock`: one skill each, with the tool the agent may call.
 

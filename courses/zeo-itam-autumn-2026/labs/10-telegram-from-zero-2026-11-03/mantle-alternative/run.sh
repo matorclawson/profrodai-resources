@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 for name in RASA_LICENSE OPENAI_API_KEY DEEPGRAM_API_KEY; do
   [ -n "${!name:-}" ] || { echo "Missing Codespaces secret: $name"; exit 1; }
 done
-python3 -m unittest test_shop 2>&1 | tail -3
-"$HOME/.venv-mantle/bin/rasa" train
-exec "$HOME/.venv-mantle/bin/rasa" inspect --port 5010
+python3 -m unittest test_shop || { echo "The shelf tests failed. Fix them before training."; exit 1; }
+RASA="${RASA_BIN:-$HOME/.venv-mantle/bin/rasa}"
+"$RASA" train
+exec "$RASA" inspect --port 5010
