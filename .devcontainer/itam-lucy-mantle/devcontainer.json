@@ -6,7 +6,8 @@
   "features": {
     "ghcr.io/devcontainers/features/python:1": {
       "version": "3.12"
-    }
+    },
+    "ghcr.io/devcontainers/features/sshd:1.1.0": {}
   },
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/courses/zeo-itam-autumn-2026/labs/10-telegram-from-zero-2026-11-03/mantle-alternative",
   "hostRequirements": {
