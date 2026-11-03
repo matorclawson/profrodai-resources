@@ -219,7 +219,7 @@ class LucyTests(unittest.TestCase):
         self.push(OWNER, "yes go ahead")
         self.lucy.guarded_round(sleep=lambda seconds: None)
         self.assertEqual(self.status(), ["DRAFT"])
-        self.assertTrue(any("not been shown" in str(r) for r in self.tool_results()))
+        self.assertTrue(any("before the proposal was shown" in str(r) or "not been shown" in str(r) for r in self.tool_results()))
         for _ in range(3):
             self.lucy.guarded_round(sleep=lambda seconds: None)
         self.assertEqual(self.status(), ["DRAFT"])
@@ -234,10 +234,41 @@ class LucyTests(unittest.TestCase):
         self.say(OWNER, "yes go ahead")
         self.assertEqual(self.status(), ["DRAFT"])
 
-    def test_a_reply_that_does_not_name_the_reference_does_not_count_as_shown(self):
+    def test_the_program_sends_the_exact_proposal_in_its_own_words(self):
         self.say(OWNER, "propose vanilla")
-        self.lucy.db.connection.execute("UPDATE lucy_pending SET presented=0")
+        shown = [text for text in self.sent_to(OWNER) if text.startswith("Proposal ")]
+        self.assertEqual(len(shown), 1)
+        ref = self.latest_id()[:8]
+        for part in (ref, "6 tubs of SKU-VANILLA", "250 cents each", "1500 cents in all", "Nothing is ordered", "Propuesta"):
+            self.assertIn(part, shown[0])
+        self.assertEqual(self.lucy.db.connection.execute("SELECT presented FROM lucy_pending").fetchone()["presented"], 1)
+
+    def test_a_model_reply_that_quotes_the_reference_does_not_make_it_shown(self):
+        self.say(OWNER, "propose vanilla")
+        self.lucy.db.connection.execute("UPDATE lucy_pending SET presented=0, presented_at=0")
         self.lucy.db.connection.commit()
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["DRAFT"])
+
+    def test_a_receipt_without_a_message_id_does_not_make_it_shown(self):
+        real = self.bot.call
+        def wrapper(method, data):
+            result = real(method, data)
+            return {} if method == "sendMessage" and str(data.get("text", "")).startswith("Proposal ") else result
+        self.bot.call = wrapper
+        self.say(OWNER, "propose vanilla")
+        self.assertEqual(self.lucy.db.connection.execute("SELECT presented FROM lucy_pending").fetchone()["presented"], 0)
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["DRAFT"])
+
+    def test_an_owner_who_cannot_be_reached_gets_no_approvable_proposal(self):
+        real = self.bot.call
+        def wrapper(method, data):
+            if method == "sendMessage" and str(data.get("text", "")).startswith("Proposal "):
+                raise OSError("owner has not started the bot")
+            return real(method, data)
+        self.bot.call = wrapper
+        self.say(OWNER, "propose vanilla")
         self.say(OWNER, "yes go ahead")
         self.assertEqual(self.status(), ["DRAFT"])
 

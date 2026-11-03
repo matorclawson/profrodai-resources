@@ -140,7 +140,7 @@ It prints how many conversations Lucy remembers.
 
 Lucy has two more tools: `propose_restock` and `approve_restock`. Both are for the owner only. The check is in Python, in `lucy.py`, on the sender number Telegram supplies, not in Lucy’s instructions. A customer typing “I am the owner” cannot choose that number.
 
-From your own phone write: “propón reponer 6 tubs de vainilla”. Lucy drafts an exact proposal, shows it to you with a short reference, and asks for your clear yes. Until a message with that reference has really been sent to you, the proposal cannot be approved, and a yes that Telegram dated before that message does not count. From a friend’s phone (a customer) write the same request. Who gets a proposal? Run `python3 show_orders.py` to see what was written down.
+From your own phone write: “propón reponer 6 tubs de vainilla”. Lucy drafts an exact proposal. The program itself, not Lucy, then sends you the proposal in a fixed form (reference, product, quantity, price) and waits for Telegram to confirm that it was sent. Until then the proposal cannot be approved, and a yes that Telegram dated before that message does not count. From a friend’s phone (a customer) write the same request. Who gets a proposal? Run `python3 show_orders.py` to see what was written down.
 
 **Checkpoint.** The owner’s request becomes a proposal with an exact product, quantity and price. The customer’s is turned down. Nothing was ordered.
 

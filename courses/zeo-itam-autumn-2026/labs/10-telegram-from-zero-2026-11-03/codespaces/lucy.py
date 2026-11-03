@@ -76,8 +76,7 @@ def approval_label(jev, text, proposal, *, make_question=make_approval_question)
 
 
 class PresentationBot:
-    """Wraps the messenger. A proposal counts as shown only when a message that contains its reference was really sent
-    to the owner's chat: a drafted proposal, or a failed or unknown delivery, can never be approved."""
+    """Wraps the messenger to remember the date Telegram gives each incoming message."""
 
     def __init__(self, bot, lucy):
         self.bot, self.lucy = bot, lucy
@@ -90,8 +89,6 @@ class PresentationBot:
         result = self.bot.call(method, data)  # raises OSError when the send did not succeed, so nothing is marked
         if method == "getUpdates":
             self.lucy.note_updates(result)
-        elif method == "sendMessage":
-            self.lucy.note_sent(data.get("chat_id"), data.get("text", ""), result)
         return result
 
 
@@ -160,9 +157,12 @@ class Lucy:
         with self.db.immediate() as connection:
             connection.execute("INSERT OR REPLACE INTO lucy_pending(chat, proposal_id, digest, work_id, presented) VALUES (?,?,?,?,0)", (chat, proposal_id, row["digest"], self.assignment.work_id))
         proposal = json.loads(row["proposal"])
-        log.info("owner proposal drafted for %s x %s", proposal["sku"], proposal["quantity"])
+        shown = self.show_proposal(proposal_id, proposal, row["amount"])
+        log.info("owner proposal drafted for %s x %s; shown to the owner: %s", proposal["sku"], proposal["quantity"], "yes" if shown else "no")
+        note = ("The program has sent the owner the exact proposal. Tell the owner, in their language, to reply with a clear yes in a new message."
+                if shown else "The owner could not be reached, so the proposal cannot be approved yet. Tell the owner, and ask them to send /start to the bot.")
         return {"proposal_id": proposal_id, "sku": proposal["sku"], "quantity": proposal["quantity"], "total_cents": row["amount"],
-                "status": row["status"], "reference": proposal_id[:8], "next": "Tell the owner the exact proposal, including its reference, and ask for a clear yes. Nothing is ordered."}
+                "status": row["status"], "reference": proposal_id[:8], "next": note + " Nothing is ordered."}
 
     def note_updates(self, updates):
         """Remember when Telegram says each message was sent, so a yes sent before the proposal was shown can be told apart."""
@@ -172,14 +172,26 @@ class Lucy:
                 if type(update.get("update_id")) is int and type(date) is int:
                     connection.execute("INSERT OR IGNORE INTO lucy_dates VALUES (?,?)", (update["update_id"], date))
 
-    def note_sent(self, chat_id, text, result=None):
-        if str(chat_id) != str(self.owner_id):
-            return
-        sent = result.get("date") if isinstance(result, dict) and type(result.get("date")) is int else int(self.now())
+    def show_proposal(self, proposal_id, proposal, total_cents):
+        """The program itself sends the owner the exact proposal, in its own words, not the model's. Only a send that
+        Telegram receipted (a positive message id) counts as shown; anything else leaves the proposal unapprovable."""
+        ref = proposal_id[:8]
+        text = ("Proposal %s: %d tubs of %s at %d cents each, %d cents in all. Nothing is ordered. Reply with a clear yes to approve it. / "
+                "Propuesta %s: %d tubs de %s a %d centavos cada uno, %d centavos en total. No se pide nada. Responde con un sí claro para aprobarla."
+                % (ref, proposal["quantity"], proposal["sku"], proposal["unit_cost_cents"], total_cents,
+                   ref, proposal["quantity"], proposal["sku"], proposal["unit_cost_cents"], total_cents))
+        try:
+            receipt = self.bot.call("sendMessage", {"chat_id": self.owner_id, "text": text})
+        except OSError as error:
+            log.warning("could not show the proposal to the owner (%s)", type(error).__name__)
+            return False
+        if not (isinstance(receipt, dict) and type(receipt.get("message_id")) is int and receipt["message_id"] > 0):
+            log.warning("the proposal was not receipted by Telegram")
+            return False
+        sent = receipt["date"] if type(receipt.get("date")) is int else int(self.now())
         with self.db.immediate() as connection:
-            for row in connection.execute("SELECT chat, proposal_id FROM lucy_pending WHERE presented=0").fetchall():
-                if row["proposal_id"][:8] in str(text):
-                    connection.execute("UPDATE lucy_pending SET presented=1, presented_at=? WHERE chat=? AND proposal_id=?", (sent, row["chat"], row["proposal_id"]))
+            connection.execute("UPDATE lucy_pending SET presented=1, presented_at=? WHERE proposal_id=?", (sent, proposal_id))
+        return True
 
     def _sent_after(self, work_id, moment):
         """True when Telegram dated the message that made this work item later than `moment`. Unknown counts as not later."""
@@ -210,7 +222,7 @@ class Lucy:
         if connection.execute("SELECT 1 FROM lucy_used_yes WHERE work_id=?", (self.assignment.work_id,)).fetchone():
             return "Not approved: this message of the owner has already been used for an approval."
         if not pending["presented"]:
-            return "Not approved: the proposal has not been shown to the owner yet, with its reference. Show it first, then wait for the owner's yes in a new message."
+            return "Not approved: the proposal has not been shown to the owner yet. The owner must receive it first, then say yes in a new message."
         if pending["work_id"] == self.assignment.work_id:
             return "Not approved: the owner must say yes in a new message, after seeing the proposal."
         if proposal_id != pending["proposal_id"]:
