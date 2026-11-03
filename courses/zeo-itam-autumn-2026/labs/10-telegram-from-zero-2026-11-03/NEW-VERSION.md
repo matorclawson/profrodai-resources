@@ -7,10 +7,10 @@
 The Telegram lab from 3 November now runs in a Codespace, and Lucy is an agent as taught in this course. In the first version Lucy answered with fixed rules. Now Telegram only carries the messages, and Lucy, running in the Codespace, does the thinking:
 
 - Each Telegram chat has its own hosted OpenAI Agents API session, so Lucy remembers the conversation, even after a restart.
-- You write in your own words, in Spanish or English. There are no commands to learn.
+- You write in your own words, in Spanish or English. Customers join with /start and the shop’s code, then ask questions in their own words.
 - Lucy checks stock with a tool, never from memory. Only the owner can ask her for a restock proposal, and only the owner’s clear yes approves it. The owner check is code on Telegram’s sender number. Jev decides whether the owner’s message was a clear yes. Nothing is ever ordered in this lab.
 
-**Why a Codespace.** In Colab the bot ran as a background thread, and Colab stops it. In a Codespace the program runs in the terminal and keeps a log: who wrote (owner or customer), how long the message was, what Jev decided, and any problem it retries. The log never repeats what people typed, because it could hold a token.
+**Why a Codespace.** In Colab the bot ran as a background thread that could be interrupted when Colab disconnected. Keep both the Codespace and Lucy’s program running. In a Codespace the program runs in the terminal and keeps a log: who wrote (owner or customer), how long the message was, what Jev decided, and any problem it retries. The log never repeats what people typed, because it could hold a token.
 
 ## Open it
 

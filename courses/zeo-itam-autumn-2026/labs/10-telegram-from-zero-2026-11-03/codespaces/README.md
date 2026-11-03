@@ -4,7 +4,7 @@
 
 This lab has two jobs, and you build them in this order. First the **transport**: Telegram carries messages between your phone and a program (steps 02 to 08). Then the **agent**: the program hands each message to Lucy, who is an agent as taught in this course (steps 09 to 15). Telegram does not think. Lucy does.
 
-The program runs in the terminal of a Codespace, not in Colab, and a log of what it does stays on the screen. It keeps running while you type from your phone. Colab stops it.
+The program runs in the terminal of a Codespace, not in Colab, and a log of what it does stays on the screen. Keep the Codespace and Lucy’s program running while you type from your phone. A Colab disconnect can interrupt a background bot.
 
 [Open in a Codespace](https://codespaces.new/profrodai/profrodai-resources?devcontainer_path=.devcontainer/itam-lucy-telegram/devcontainer.json)
 
@@ -118,11 +118,11 @@ In the same file change `join_code` to a word of your own: a friend sends `/star
 python3 lucy.py
 ```
 
-It prints “Lucy is listening”. Now write to your bot in free text, in Spanish or English: “¿cuántos helados de vainilla quedan?”, “do you have strawberry?”. There are no commands to learn. Lucy has one tool for facts, `stock`, and she must use it instead of guessing. Each message appears in the log as who sent it (owner or customer), how many characters it had, what Jev decided, and how long the turn took. The log never repeats what people typed, because it could hold a token.
+It prints “Lucy is listening”. Now write to your bot in free text, in Spanish or English: “¿cuántos helados de vainilla quedan?”, “do you have strawberry?”. Once you have joined, ask stock and restock questions in your own words instead of using slash commands. Lucy has one tool for facts, `stock`, and she must use it instead of guessing. Each message appears in the log as who sent it (owner or customer), how many characters it had, what Jev decided, and how long the turn took. The log never repeats what people typed, because it could hold a token.
 
 If a classmate joins with `/start` and your code, ask them to write to your bot too. A problem with the connection appears in the log and is tried again; it does not stop Lucy.
 
-**Checkpoint.** Different phrasing and both languages get correct numbers, and the log shows each turn. Press Ctrl+C to stop.
+**Checkpoint.** Different phrasing and both languages get correct numbers, and the log shows each turn. Keep Lucy running for step 12. When a later step asks you to stop, press Ctrl+C.
 
 ## 12 · Lucy remembers
 
@@ -140,7 +140,7 @@ It prints how many conversations Lucy remembers.
 
 Lucy has two more tools: `propose_restock` and `approve_restock`. Both are for the owner only. The check is in Python, in `lucy.py`, on the sender number Telegram supplies, not in Lucy’s instructions. A customer typing “I am the owner” cannot choose that number.
 
-From your own phone write: “propón reponer 6 tubs de vainilla”. Lucy drafts an exact proposal. The program itself, not Lucy, then sends you the proposal in a fixed form (reference, product, quantity, price) and waits for Telegram to confirm that it was sent. Until then the proposal cannot be approved, and a yes that Telegram dated before that message does not count. From a friend’s phone (a customer) write the same request. Who gets a proposal? Run `python3 show_orders.py` to see what was written down.
+From your own phone write: “propón reponer 6 botes de helado de vainilla”. Lucy drafts an exact proposal. The program itself, not Lucy, then sends you the proposal in a fixed form (reference, product, quantity, price) and waits for Telegram to confirm that it was sent. Until then the proposal cannot be approved, and a yes that Telegram dated before that message does not count. From a friend’s phone (a customer) write the same request. Who gets a proposal? Run `python3 show_orders.py` to see what was written down.
 
 **Checkpoint.** The owner’s request becomes a proposal with an exact product, quantity and price. The customer’s is turned down. Nothing was ordered.
 
