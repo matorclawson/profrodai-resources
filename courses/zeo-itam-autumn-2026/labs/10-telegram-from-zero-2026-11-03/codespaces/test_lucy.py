@@ -34,6 +34,9 @@ class LucyTests(unittest.TestCase):
         self.lucy = None
         self.t = 1_000_000
         self.bot = FakeMessenger()
+        real_call = self.bot.call
+        # Telegram's sendMessage returns a Message with a date; the fake messenger does not, so the tests add it.
+        self.bot.call = lambda method, data: (lambda r: {**r, "date": self.t} if method == "sendMessage" and isinstance(r, dict) else r)(real_call(method, data))
         self.agent = FakeAgentsClient(self.script)
         sessions = self.agent.beta.agents.sessions
         original = sessions._say
@@ -312,6 +315,19 @@ class LucyTests(unittest.TestCase):
         for _ in range(4):
             self.lucy.guarded_round(sleep=lambda seconds: None)
         self.assertEqual(self.status(), ["APPROVED"])
+
+    def test_a_receipt_without_a_date_does_not_make_it_shown(self):
+        real = self.bot.call
+        def wrapper(method, data):
+            result = real(method, data)
+            if method == "sendMessage" and str(data.get("text", "")).startswith("Proposal "):
+                return {"message_id": 7}  # no date: the order of messages cannot be checked
+            return result
+        self.bot.call = wrapper
+        self.say(OWNER, "propose vanilla")
+        self.assertEqual(self.lucy.db.connection.execute("SELECT presented FROM lucy_pending").fetchone()["presented"], 0)
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["DRAFT"])
 
     def test_an_unclear_answer_does_not_approve(self):
         self.say(OWNER, "propose vanilla")

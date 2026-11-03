@@ -188,7 +188,10 @@ class Lucy:
         if not (isinstance(receipt, dict) and type(receipt.get("message_id")) is int and receipt["message_id"] > 0):
             log.warning("the proposal was not receipted by Telegram")
             return False
-        sent = receipt["date"] if type(receipt.get("date")) is int else int(self.now())
+        if type(receipt.get("date")) is not int or receipt["date"] <= 0:
+            log.warning("Telegram's receipt had no date, so the order of messages cannot be checked")
+            return False
+        sent = receipt["date"]  # Telegram's own time, the same clock as the dates of incoming messages
         with self.db.immediate() as connection:
             connection.execute("UPDATE lucy_pending SET presented=1, presented_at=? WHERE proposal_id=?", (sent, proposal_id))
         return True
