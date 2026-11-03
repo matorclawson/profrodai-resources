@@ -127,9 +127,37 @@ class LabTests(unittest.TestCase):
 
     def test_shelf_answers(self):
         self.assertEqual(shop.stock_reply("strawberry"), "strawberry: 0 tubs")
-        self.assertEqual(shop.stock_reply("mango"), "Unknown flavor")
+        self.assertEqual(shop.stock_reply("mango"),
+                         "Unknown flavor. No conozco ese sabor. Tengo: vainilla, chocolate, fresa")
         self.assertEqual(shop.answer(1, "/stock Vanilla"), "vanilla: 2 tubs")
-        self.assertEqual(shop.answer(1, "hi"), "Try /stock vanilla")
+        self.assertEqual(shop.answer(1, "hi"), "Try /stock vanilla · Prueba /stock vainilla")
+
+    def test_spanish_names_capitals_and_accents(self):
+        for typed in ("vainilla", "Vainilla", "VAINILLA", "vainílla", "  vainilla  "):
+            self.assertEqual(shop.answer(1, f"/stock {typed}"), "vanilla: 2 tubs", typed)
+        self.assertEqual(shop.answer(1, "/stock fresa"), "strawberry: 0 tubs")
+        self.assertEqual(shop.answer(1, "/stock Fresa"), "strawberry: 0 tubs")
+        self.assertEqual(shop.answer(1, "/stock Chocoláte"), "chocolate: 12 tubs")
+        self.assertEqual(shop.answer(1, "/STOCK Vainilla"), "vanilla: 2 tubs")
+
+    def test_unknown_flavor_lists_the_flavors_in_both_languages(self):
+        reply = shop.answer(1, "/stock pistacho")
+        self.assertTrue(reply.startswith("Unknown flavor. No conozco ese sabor."))
+        for word in ("vainilla", "chocolate", "fresa"):
+            self.assertIn(word, reply)
+
+    def test_start_and_a_first_hello_get_one_short_line_on_how_to_use_the_bot(self):
+        line = "Try /stock vanilla · Prueba /stock vainilla"
+        for text in ("/start", "hola", "hello lucy", "/help"):
+            self.assertEqual(shop.answer(1, text), line, text)
+
+    def test_menu_tap_with_bot_name_still_works(self):
+        self.assertEqual(shop.answer(1, "/stock@lucyhelados_bot vainilla"), "vanilla: 2 tubs")
+
+    def test_restock_accepts_the_spanish_name(self):
+        self.assertEqual(shop.answer(42, "/restock vainilla", owner_id=42), "Propose 6 tubs")
+        self.assertEqual(shop.answer(42, "/restock fresa", owner_id=42), "No target for that flavor")
+        self.assertEqual(shop.answer(43, "/restock vainilla", owner_id=42), "Owner only")
 
     def test_owner_gets_a_proposal_and_customer_does_not(self):
         self.assertEqual(shop.answer(42, "/restock vanilla", owner_id=42), "Propose 6 tubs")
@@ -164,7 +192,7 @@ class LabTests(unittest.TestCase):
         self.wait_for(1)
         stop.set()
         thread.join(10)
-        self.assertEqual([text for _, text in self.fake.sent], ["Unknown flavor"])
+        self.assertEqual([text for _, text in self.fake.sent], [shop.stock_reply("mango")])
         self.assertIn("Problem: Telegram answered with an error (HTTP 502)", out.getvalue())
 
     def test_bot_explains_a_409_and_keeps_going(self):
@@ -217,8 +245,8 @@ class LabTests(unittest.TestCase):
         self.wait_for(2)
         stop.set()
         thread.join(10)
-        self.assertIn("customer used a message, answered 'Try /stock vanilla'", out.getvalue())
-        self.assertIn("customer used /stock, answered 'Unknown flavor'", out.getvalue())
+        self.assertIn("customer used a message, answered 'Try /stock vanilla · Prueba /stock vainilla'", out.getvalue())
+        self.assertIn("customer used /stock, answered 'Unknown flavor.", out.getvalue())
         self.assertNotIn("123:FAKE", out.getvalue())
         self.assertNotIn("my token", out.getvalue())
 

@@ -32,13 +32,13 @@ def save_offset(value):
         handle.write(str(value))
 
 
-COMMANDS = ("/stock", "/restock", "/whoami")
+COMMANDS = ("/start", "/stock", "/restock", "/whoami")
 
 
 def log_line(role, text, reply):
     """What the log may show: who (a role, not a number), which command, and the answer.
     It never repeats the text typed (it could hold a token) and never prints the /whoami number."""
-    command = (text or "").strip().lower().split(" ")[0]
+    command = (text or "").strip().lower().split(" ")[0].split("@")[0]
     if command not in COMMANDS:
         command = "a message"
     outcome = "sent the sender number to the chat" if command == "/whoami" else f"answered {reply!r}"

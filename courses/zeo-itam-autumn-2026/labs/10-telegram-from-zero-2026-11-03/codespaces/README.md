@@ -16,7 +16,7 @@ Run each step in the terminal at the bottom of the Codespace. The scripts are sm
 
 ## 01 · Watch Lucy answer from her shelf
 
-Rod projects the prepared demo bot’s chat. Anyone can watch before signing in. Ask “How many vanilla tubs does Lucy have?” Send `/stock vanilla`. Show the reply with 2 tubs. Change one number in `shop.py`, restart the demo bot, then send the identical message again. Ask someone to predict the second reply before revealing it.
+Rod projects the prepared demo bot’s chat. Anyone can watch before signing in. Ask “How many vanilla tubs does Lucy have?” (¿Cuántos helados de vainilla tiene Lucy?) Send `/stock vanilla`, or `/stock vainilla`. Show the reply with 2 tubs. Change one number in `shop.py`, restart the demo bot, then send the identical message again. Ask someone to predict the second reply before revealing it.
 
 **Checkpoint.** The phone now says 7 tubs. Where did that number come from?
 
@@ -69,7 +69,7 @@ Send `hello lucy` again in your shop chat, then run:
 python3 step07_read.py
 ```
 
-getUpdates asks Telegram for waiting messages. Look at the three lines it prints. The text tells you what was asked, the sender identifies who asked, and the chat tells you where the answer belongs. Hide the numeric IDs on the projector. If no matching message appears, confirm the username, resend the words and run again.
+getUpdates asks Telegram for waiting messages. This step also marks every message waiting at that moment as read, on purpose, so that old messages are not answered hours later and `hello lucy` is not treated as a command. Messages you sent before this step get no answer from the bot. Look at the three lines it prints. The text tells you what was asked, the sender identifies who asked, and the chat tells you where the answer belongs. Hide the numeric IDs on the projector. If no matching message appears, confirm the username, resend the words and run again.
 
 **Checkpoint.** Python prints “Received: hello lucy”. Look at your phone. Has anyone answered yet?
 
@@ -81,13 +81,13 @@ Predict which chat will receive this message. Run `python3 step08_send.py` once 
 
 ## 09 · Teach Python to read the shelf
 
-Lucy keeps stock in a Python dictionary in `shop.py`. Predict the answer for chocolate, then run `python3 step09_shelf.py`. Edit vanilla from 2 to 5 in `shop.py`, run it again, and explain why chocolate stays the same. Compare strawberry (a product with zero stock) with mango (absent). These checks run entirely inside the Codespace.
+Lucy keeps stock in a Python dictionary in `shop.py`. Predict the answer for chocolate, then run `python3 step09_shelf.py`. Edit vanilla from 2 to 5 in `shop.py`, run it again, and explain why chocolate stays the same. Compare strawberry (a product with zero stock) with mango (absent). The shelf also accepts Spanish names and ignores capitals and accents: the last line of the script asks for `Vainilla`. These checks run entirely inside the Codespace.
 
 **Checkpoint.** The same function distinguishes an empty shelf from an unknown product.
 
 ## 10 · Connect the shelf to incoming commands
 
-A command is ordinary chat text beginning with a slash. Send `/stock vanilla` to your bot and run:
+A command is ordinary chat text beginning with a slash. Send `/stock vanilla` (or `/stock vainilla`) to your bot and run:
 
 ```
 python3 step10_answer_once.py
@@ -105,7 +105,7 @@ Run the bot:
 python3 bot.py
 ```
 
-It prints “Listening” and stays on the screen. Send two different stock commands from your phone. Each one appears in the log with the command and the answer sent. Ask your partner to open your public link, tap Start and test a third. A 409 in the log means another bot.py or a webhook is using this token. Stop the other one or create a fresh classroom bot. If the connection drops, the log says “Problem” and the bot tries again by itself.
+It prints “Listening” and stays on the screen. Send two different stock commands from your phone, such as `/stock vanilla` and `/stock chocolate`, or in Spanish `/stock vainilla` and `/stock fresa`. Any other first message, such as `/start`, gets one line on how to use the bot. Each one appears in the log with the command and the answer sent. Ask your partner to open your public link, tap Start and test a third. A 409 in the log means another bot.py or a webhook is using this token. Stop the other one or create a fresh classroom bot. If the connection drops, the log says “Problem” and the bot tries again by itself.
 
 **Checkpoint.** Different phone replies arrive without you running anything again, and the log shows each one. To stop, press Ctrl+C in the terminal.
 
@@ -144,7 +144,8 @@ Press Ctrl+C. The log says “Stopped”. Send `/stock mango` again. Why did the
 - **“No bot token found.”** Add the secret, or run `source set_token.sh` in this terminal.
 - **401.** Telegram rejected the token. Copy it again from BotFather.
 - **409.** Two programs are reading the same bot. Stop one.
-- **No reply and no log line.** The bot is not running, or you messaged a different bot. Check the name at the top of the chat.
+- **No reply and no log line.** The bot is not running, or you messaged a different bot. Check the name at the top of the chat. Messages you sent before step 07 or before you started `bot.py` may have been marked as read already.
+- **“Unknown flavor” for a flavor you expect.** Check the spelling. The names are vanilla or vainilla, chocolate, strawberry or fresa. Add your own to `STOCK` and `NAMES` in `shop.py`.
 - **Closing the browser tab.** The Codespace stops after a while and so does the bot. Open it again and run `python3 bot.py`.
 
 ## Files
