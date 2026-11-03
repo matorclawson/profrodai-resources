@@ -1,8 +1,8 @@
 ---
 name: Propose restock
 description: >
-  A request to restock or reorder vanilla, for example "/restock vanilla" or
-  "Please propose a restock of vanilla".
+  A request to restock or reorder vanilla, for example "restock vanilla" or
+  "Please propose a restock of vanilla". The owner adds the shop PIN.
 ---
 
-Call @tool.propose_restock with the flavor. Repeat the `reply` field of the result word for word. Do not add your own opinion about who may ask: the tool decides.
+Call @tool.propose_restock with the flavor and, if the person gave one, the shop PIN exactly as they said it. If they gave no PIN, call the tool with an empty pin. Repeat the `reply` field of the result word for word. Never say what the PIN is, never hint at it, and do not judge who the person is: the tool decides.

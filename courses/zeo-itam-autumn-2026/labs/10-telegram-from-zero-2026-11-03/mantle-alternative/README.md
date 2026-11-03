@@ -9,14 +9,14 @@ The class is about one idea: a shop assistant that tells everyone how many tubs 
 1. Ask "How many vanilla tubs does Lucy have?" The answer is 2.
 2. Change one number in the shelf (`INVENTORY` in `shop.py`), restart, ask again. The answer is 7. Ask: where did that number come from?
 3. Ask about strawberry (an empty shelf: 0 tubs) and mango (not sold: unknown flavor). Two different answers.
-4. With 2 tubs and a target of 8, Lucy asks for a restock and gets "Propose 6 tubs". A customer asking the same thing gets "Owner only".
+4. With 2 tubs and a target of 8, Lucy asks for a restock and gives the shop PIN: "Propose 6 tubs". A customer without the PIN asking the same thing gets "Owner only".
 5. The proposal changes nothing on the shelf. Ask for the stock again to prove it.
 
 ## What you need
 
 - A GitHub account that can open a Codespace.
 - Three keys, added as Codespaces secrets in your own GitHub settings and made available to this repository: `RASA_LICENSE`, `OPENAI_API_KEY` and `DEEPGRAM_API_KEY`. They are never written into any file here.
-- The shop owner's sender setting, `LUCY_SENDER_ID` (see "Who is Lucy").
+- The shop PIN, `OWNER_PIN` in `shop.py` (see "Who is Lucy"). Change it before class.
 
 ## Open it
 
@@ -26,12 +26,14 @@ When it is ready, open a terminal and run `bash run.sh`. It runs the offline tes
 
 ## Who is Lucy
 
-The agent does not believe anyone who types "I am Lucy". The restock tool reads who is asking from the channel, a field the person cannot type, and compares it with `LUCY_SENDER_ID`. If that setting is empty, nobody is Lucy and everyone gets "Owner only".
+The agent does not believe anyone who types "I am Lucy". The restock tool checks a shop PIN in Python code, outside the chat model. Say it like this: "Restock vanilla, PIN 4242" (use your own PIN). A wrong or missing PIN gets "Owner only", and the tool never repeats the PIN.
+
+Be clear with your class about what this shows. It teaches the idea that a permission lives in code, not in the conversation. It is not a login: anyone who learns the PIN is Lucy, and Inspector browser tabs are separate conversations, not verified people. The Telegram notebook checks Telegram's sender field instead, which a customer cannot type.
 
 ## The files
 
 - `shop.py`: the shelf and the two answers. Plain Python, no Rasa.
-- `test_shop.py`: eight offline tests of the sequence above. Run `python3 -m unittest test_shop`.
+- `test_shop.py`: nine offline tests of the sequence above. Run `python3 -m unittest test_shop`.
 - `agent.yml`, `integrations.yml`: the agent, the model and the voice settings.
 - `skills/check_stock`, `skills/propose_restock`: one skill each, with the tool the agent may call.
 

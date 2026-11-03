@@ -6,6 +6,8 @@ import os
 
 INVENTORY = {"vanilla": 2, "chocolate": 12, "strawberry": 0}
 TARGET = 8
+# Lucy's shop PIN. Change it before class; the LUCY_PIN setting wins if it is set.
+OWNER_PIN = "4242"
 
 
 def stock_reply(item):
@@ -15,15 +17,16 @@ def stock_reply(item):
     return "Unknown flavor"
 
 
-def is_owner(sender_id):
-    """Lucy is whoever the LUCY_SENDER_ID setting names. If it is not set, nobody is Lucy."""
-    owner = os.environ.get("LUCY_SENDER_ID", "").strip()
-    return bool(owner) and str(sender_id) == owner
+def is_owner(pin):
+    """Lucy is whoever knows the shop PIN. This teaches the idea of a permission check
+    that lives in code, not in the chat. It is not a login: anyone who learns the PIN is Lucy."""
+    expected = os.environ.get("LUCY_PIN", "").strip() or OWNER_PIN
+    return bool(expected) and str(pin or "").strip() == expected
 
 
-def restock_reply(sender_id, item):
+def restock_reply(pin, item):
     item = (item or "").lower().strip()
-    if not is_owner(sender_id):
+    if not is_owner(pin):
         return "Owner only"
     if item != "vanilla":
         return "No target for that flavor"
