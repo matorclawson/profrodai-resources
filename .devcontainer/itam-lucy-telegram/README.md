@@ -1,5 +1,5 @@
-# Lucy’s shop bot, Telegram Codespace
+# Lucy’s shop agent, Telegram Codespace
 
-This configuration uses Python 3.12 and the standard library only. Nothing is installed when it is created, and creating it makes no call to Telegram. It forwards no port: the bot reaches out to Telegram and nothing reaches in.
+This configuration uses Python 3.12. Creating it installs three pinned packages (`pydantic`, `openai` and `typesafe-sdk`) with pip, and makes no call to Telegram, OpenAI or Jev. It forwards no port: the program reaches out to Telegram, OpenAI and Jev and nothing reaches in.
 
-The one setting is the `TELEGRAM_BOT_TOKEN` Codespaces secret. A Codespace has no web page here; the lab runs in its terminal.
+Three Codespaces secrets are used: `TELEGRAM_BOT_TOKEN` (from step 05), and `OPENAI_API_KEY` and `TYPESAFE_API_KEY` (from step 09, when Lucy becomes an agent). The Codespace has no web page; the lab runs in its terminal.

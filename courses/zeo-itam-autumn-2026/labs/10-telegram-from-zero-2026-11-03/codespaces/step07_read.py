@@ -13,6 +13,3 @@ print("Chat to answer:", hello["chat"]["id"])
 print("Sent by:", hello["from"]["id"])
 with open("chat_id.txt", "w") as handle:
     handle.write(str(hello["chat"]["id"]))
-# Remember how far we have read, so hello lucy is not answered later as if it were a command.
-with open("offset.txt", "w") as handle:
-    handle.write(str(max(update["update_id"] for update in batch) + 1))
