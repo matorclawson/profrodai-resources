@@ -98,15 +98,17 @@ No network and no key. A scripted customer joins and asks “tienes vainilla?”
 
 **Checkpoint.** You see the welcome and Lucy’s reply, and the tests print OK. Which three things were fake?
 
-## 10 · Find your owner id and name your shop
+## 10 · Tell Lucy who the owner is
 
-Lucy must know who the owner is, and that cannot be something a customer types. Send any message to your bot (“hola”), then run:
+Lucy must know who the owner is, and that cannot be something a customer types or a stranger can claim. You prove it with a word only you know.
 
-```
-python3 find_my_id.py
-```
+1. Choose a pairing word that only you know (4 to 40 letters, digits, `-` or `_`).
+2. From your own phone send your bot exactly: `owner` and a space and your word. For example `owner mango-4821`.
+3. Run `python3 find_my_id.py mango-4821` (with your word). It reads the sender number from Telegram’s own field and saves it in `business.toml` as `owner_telegram_id`. Hide the number when you share your screen.
 
-It reads the sender number from Telegram’s own field and saves it in `business.toml` as `owner_telegram_id`. Hide the number when you share your screen. In the same file change `join_code` to a word of your own: a friend sends `/start` followed by that code to become a customer. Everyone else is ignored.
+Only a message that carries your word counts. If someone else finds your bot, they cannot become the owner, and an owner that is already saved is never replaced unless you add `--replace`.
+
+In the same file change `join_code` to a word of your own: a friend sends `/start` followed by that code to become a customer. Everyone else is ignored.
 
 **Checkpoint.** `business.toml` holds your number and your join code, and the program refuses to start without them.
 
