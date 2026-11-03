@@ -1,0 +1,24 @@
+{
+  "name": "Proof copy of the Telegram Codespace (adds sshd so a maintainer can check it)",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/courses/zeo-itam-autumn-2026/labs/10-telegram-from-zero-2026-11-03/codespaces",
+  "hostRequirements": {
+    "cpus": 2
+  },
+  "secrets": {
+    "TELEGRAM_BOT_TOKEN": {
+      "description": "The token BotFather gave you for your own shop bot (step 05). Leave it empty and use source set_token.sh if you prefer."
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "workbench.startupEditor": "readme"
+      }
+    }
+  },
+  "postAttachCommand": "echo 'Open README.md in this folder and follow the steps in the terminal.'",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1.1.0": {}
+  }
+}
