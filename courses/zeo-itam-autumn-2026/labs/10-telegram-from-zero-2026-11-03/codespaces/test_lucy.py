@@ -183,6 +183,27 @@ class LucyTests(unittest.TestCase):
         self.say(OWNER, "yes go ahead")
         self.assertEqual(self.status(), ["APPROVED"])
 
+    def test_one_owner_message_approves_at_most_once_even_if_a_new_proposal_appears_in_it(self):
+        self.say(OWNER, "propose vanilla")
+        first = self.latest_id()
+        self.say(OWNER, "yes go ahead")
+        used = self.lucy.db.connection.execute("SELECT work_id FROM lucy_used_yes").fetchone()
+        self.assertIsNotNone(used)
+        # the same owner message (same work item) tries again after a new proposal was drafted somewhere else
+        with self.lucy.db.immediate() as connection:
+            row = connection.execute("SELECT proposal, digest, amount FROM assistant_orders WHERE id=?", (first,)).fetchone()
+        self.say(OWNER, "propose vanilla once more")
+        second = self.latest_id()
+        self.assertNotEqual(first, second)
+        class Reused:
+            session_id, text, work_id = "telegram:1234:%d" % OWNER, "yes go ahead", used["work_id"]
+        self.lucy.assignment = Reused()
+        self.assertIn("already been used", self.lucy.approve_restock(second))
+        self.lucy.assignment = None
+        statuses = dict(self.lucy.db.connection.execute("SELECT id, status FROM assistant_orders").fetchall())
+        self.assertEqual(statuses[first], "APPROVED")
+        self.assertEqual(statuses[second], "DRAFT")
+
     def test_an_unclear_answer_does_not_approve(self):
         self.say(OWNER, "propose vanilla")
         self.say(OWNER, "maybe later")

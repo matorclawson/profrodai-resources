@@ -90,6 +90,7 @@ class Lucy:
         self.db.migrate("orders", parts["approval"]["ORDER_MIGRATIONS"])
         self.db.connection.row_factory = parts["approval"]["named_rows"]
         with self.db.immediate() as connection:
+            connection.execute("CREATE TABLE IF NOT EXISTS lucy_used_yes (work_id INTEGER PRIMARY KEY)")
             connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL, work_id INTEGER NOT NULL)")
         self.enrollment = parts["Enrollment"](str(data / "enrolled.db"))
         self.wrapped = parts["EnrollBot"](bot, self.enrollment, config["join_code"], config["welcome"])
@@ -158,6 +159,8 @@ class Lucy:
         pending = connection.execute("SELECT proposal_id, digest, work_id FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
         if pending is None:
             return "Nothing is waiting for the owner's yes. Ask for a proposal first."
+        if connection.execute("SELECT 1 FROM lucy_used_yes WHERE work_id=?", (self.assignment.work_id,)).fetchone():
+            return "Not approved: this message of the owner has already been used for an approval."
         if pending["work_id"] == self.assignment.work_id:
             return "Not approved: the owner must say yes in a new message, after seeing the proposal."
         if proposal_id != pending["proposal_id"]:
@@ -175,6 +178,7 @@ class Lucy:
         ch11["approve"](self.db, order["id"], order["digest"], actor=str(self.owner_id), policy=policy, expires=self.now() + 3600)
         with self.db.immediate() as connection:  # the yes is used up: a second yes cannot approve anything else
             connection.execute("DELETE FROM lucy_pending WHERE chat=?", (chat,))
+            connection.execute("INSERT OR IGNORE INTO lucy_used_yes VALUES (?)", (self.assignment.work_id,))
         return "Approved and recorded for one hour. Nothing is ordered: this lab never sends an order to a supplier."
 
     def one_round(self):

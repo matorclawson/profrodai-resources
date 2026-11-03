@@ -148,7 +148,7 @@ From your own phone write: “propón reponer 6 tubs de vainilla”. Lucy drafts
 
 Reply to the proposal from your phone: “sí, adelante” (or “yes go ahead”). Lucy does not decide whether that was a yes. Jev classifies your real message as approve, reject or unclear, and below 70% sure it counts as unclear. Only an approve, from the owner’s number, reaches the book’s Chapter 11 approval code, which checks the exact proposal. Try “quizás luego” (maybe later) on a new proposal and compare. Run `python3 show_orders.py` after each.
 
-This lab records the approval and nothing more. No order is ever sent to a supplier.
+A yes belongs to one message: it approves only the proposal waiting from an earlier message, and the same message cannot approve twice. This lab records the approval and nothing more. No order is ever sent to a supplier.
 
 **Checkpoint.** A clear yes gives an approved proposal. “Quizás luego” leaves it a draft.
 
