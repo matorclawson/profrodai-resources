@@ -75,6 +75,24 @@ def approval_label(jev, text, proposal, *, make_question=make_approval_question)
         return "unclear", 0.0
 
 
+class PresentationBot:
+    """Wraps the messenger. A proposal counts as shown only when a message that contains its reference was really sent
+    to the owner's chat: a drafted proposal, or a failed or unknown delivery, can never be approved."""
+
+    def __init__(self, bot, lucy):
+        self.bot, self.lucy = bot, lucy
+
+    @property
+    def account(self):
+        return self.bot.account
+
+    def call(self, method, data):
+        result = self.bot.call(method, data)  # raises OSError when the send did not succeed, so nothing is marked
+        if method == "sendMessage":
+            self.lucy.note_sent(data.get("chat_id"), data.get("text", ""))
+        return result
+
+
 class Lucy:
     """The agent, its tools, and the owner check. The check is Python on Telegram's sender id, not the model's opinion."""
 
@@ -91,9 +109,9 @@ class Lucy:
         self.db.connection.row_factory = parts["approval"]["named_rows"]
         with self.db.immediate() as connection:
             connection.execute("CREATE TABLE IF NOT EXISTS lucy_used_yes (work_id INTEGER PRIMARY KEY)")
-            connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL, work_id INTEGER NOT NULL)")
+            connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL, work_id INTEGER NOT NULL, presented INTEGER NOT NULL DEFAULT 0)")
         self.enrollment = parts["Enrollment"](str(data / "enrolled.db"))
-        self.wrapped = parts["EnrollBot"](bot, self.enrollment, config["join_code"], config["welcome"])
+        self.wrapped = parts["EnrollBot"](PresentationBot(bot, self), self.enrollment, config["join_code"], config["welcome"])
         self.assignment = None
         self.session = parts["AgentSession"](
             agent_client, str(data / "sessions.db"), model=config["model"], instructions=config["instructions"], tools=TOOL_SPECS,
@@ -137,11 +155,19 @@ class Lucy:
         chat = self.assignment.session_id
         self._supersede(chat, proposal_id)
         with self.db.immediate() as connection:
-            connection.execute("INSERT OR REPLACE INTO lucy_pending VALUES (?,?,?,?)", (chat, proposal_id, row["digest"], self.assignment.work_id))
+            connection.execute("INSERT OR REPLACE INTO lucy_pending(chat, proposal_id, digest, work_id, presented) VALUES (?,?,?,?,0)", (chat, proposal_id, row["digest"], self.assignment.work_id))
         proposal = json.loads(row["proposal"])
         log.info("owner proposal drafted for %s x %s", proposal["sku"], proposal["quantity"])
         return {"proposal_id": proposal_id, "sku": proposal["sku"], "quantity": proposal["quantity"], "total_cents": row["amount"],
-                "status": row["status"], "next": "Tell the owner the exact proposal and ask for a clear yes. Nothing is ordered."}
+                "status": row["status"], "reference": proposal_id[:8], "next": "Tell the owner the exact proposal, including its reference, and ask for a clear yes. Nothing is ordered."}
+
+    def note_sent(self, chat_id, text):
+        if str(chat_id) != str(self.owner_id):
+            return
+        with self.db.immediate() as connection:
+            for row in connection.execute("SELECT chat, proposal_id FROM lucy_pending WHERE presented=0").fetchall():
+                if row["proposal_id"][:8] in str(text):
+                    connection.execute("UPDATE lucy_pending SET presented=1 WHERE chat=? AND proposal_id=?", (row["chat"], row["proposal_id"]))
 
     def _supersede(self, chat, new_id):
         """Only the proposal just shown can be approved. An older open one is revoked, so a later yes cannot reach it."""
@@ -156,11 +182,13 @@ class Lucy:
             return OWNER_ONLY
         connection = self.db.connection
         chat = self.assignment.session_id
-        pending = connection.execute("SELECT proposal_id, digest, work_id FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
+        pending = connection.execute("SELECT proposal_id, digest, work_id, presented FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
         if pending is None:
             return "Nothing is waiting for the owner's yes. Ask for a proposal first."
         if connection.execute("SELECT 1 FROM lucy_used_yes WHERE work_id=?", (self.assignment.work_id,)).fetchone():
             return "Not approved: this message of the owner has already been used for an approval."
+        if not pending["presented"]:
+            return "Not approved: the proposal has not been shown to the owner yet, with its reference. Show it first, then wait for the owner's yes in a new message."
         if pending["work_id"] == self.assignment.work_id:
             return "Not approved: the owner must say yes in a new message, after seeing the proposal."
         if proposal_id != pending["proposal_id"]:

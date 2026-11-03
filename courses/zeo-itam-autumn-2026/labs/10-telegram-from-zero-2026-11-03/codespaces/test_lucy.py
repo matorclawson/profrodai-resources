@@ -34,6 +34,9 @@ class LucyTests(unittest.TestCase):
         self.lucy = None
         self.bot = FakeMessenger()
         self.agent = FakeAgentsClient(self.script)
+        sessions = self.agent.beta.agents.sessions
+        original = sessions._say
+        sessions._say = lambda sid, text: original(sid, text.replace("{REF}", self.latest_id()[:8] if self.lucy else ""))
         self.jev = FakeJev(jev_script)
         self.config = dict(owner_telegram_id=OWNER, data_dir=self.scratch.name, join_code="CODE", welcome="welcome",
                            model="m", instructions="i")
@@ -52,7 +55,7 @@ class LucyTests(unittest.TestCase):
 
     def script(self, text):
         if text.startswith("propose"):
-            return ("tool", "propose_restock", {"sku": "SKU-VANILLA", "quantity": 6}, "Proposed: 6 tubs of vanilla.")
+            return ("tool", "propose_restock", {"sku": "SKU-VANILLA", "quantity": 6}, "Proposed: 6 tubs of vanilla (reference {REF}). Do you approve?")
         if text.startswith("yes go ahead") or text.startswith("maybe"):
             return ("tool", "approve_restock", {"proposal_id": self.latest_id()}, "done")
         if text.startswith("stock?"):
@@ -203,6 +206,33 @@ class LucyTests(unittest.TestCase):
         statuses = dict(self.lucy.db.connection.execute("SELECT id, status FROM assistant_orders").fetchall())
         self.assertEqual(statuses[first], "APPROVED")
         self.assertEqual(statuses[second], "DRAFT")
+
+    def test_a_yes_in_the_same_poll_as_the_proposal_approves_nothing_until_it_was_shown(self):
+        self.bot.push(OWNER, "propose vanilla")
+        self.bot.push(OWNER, "yes go ahead")
+        self.lucy.guarded_round(sleep=lambda seconds: None)
+        self.assertEqual(self.status(), ["DRAFT"])
+        self.assertTrue(any("not been shown" in str(r) for r in self.tool_results()))
+        for _ in range(3):
+            self.lucy.guarded_round(sleep=lambda seconds: None)
+        self.assertEqual(self.status(), ["DRAFT"])
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["APPROVED"])
+
+    def test_a_failed_delivery_of_the_proposal_never_counts_as_shown(self):
+        self.bot.lose_next_reply = True  # the message is delivered, then the call raises: the outcome is unknown
+        self.say(OWNER, "propose vanilla", rounds=2)
+        row = self.lucy.db.connection.execute("SELECT presented FROM lucy_pending").fetchone()
+        self.assertEqual(row["presented"], 0)
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["DRAFT"])
+
+    def test_a_reply_that_does_not_name_the_reference_does_not_count_as_shown(self):
+        self.say(OWNER, "propose vanilla")
+        self.lucy.db.connection.execute("UPDATE lucy_pending SET presented=0")
+        self.lucy.db.connection.commit()
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["DRAFT"])
 
     def test_an_unclear_answer_does_not_approve(self):
         self.say(OWNER, "propose vanilla")
