@@ -195,10 +195,32 @@ class LabTests(unittest.TestCase):
         thread.join(10)
         text = out.getvalue()
         self.assertEqual([t for _, t in self.fake.sent], ["Propose 6 tubs", "Owner only"])
-        self.assertIn("owner asked '/restock vanilla'", text)
-        self.assertIn("customer asked '/restock vanilla'", text)
+        self.assertIn("owner used /restock, answered 'Propose 6 tubs'", text)
+        self.assertIn("customer used /restock, answered 'Owner only'", text)
         for secret in ("123:FAKE", "5001", "6002"):
             self.assertNotIn(secret, text)
+
+    def test_whoami_log_has_no_number_but_the_chat_reply_does(self):
+        stop, thread, out = self.serve_in_thread(owner=None)
+        self.fake.push("/whoami", user=7788, chat=7788)
+        self.wait_for(1)
+        stop.set()
+        thread.join(10)
+        self.assertEqual(self.fake.sent, [(7788, "7788")])
+        self.assertIn("customer used /whoami, sent the sender number to the chat", out.getvalue())
+        self.assertNotIn("7788", out.getvalue())
+
+    def test_text_typed_by_a_user_is_never_logged(self):
+        stop, thread, out = self.serve_in_thread()
+        self.fake.push("my token is 123:FAKE and /stock vanilla")
+        self.fake.push("/stock 123:FAKE")
+        self.wait_for(2)
+        stop.set()
+        thread.join(10)
+        self.assertIn("customer used a message, answered 'Try /stock vanilla'", out.getvalue())
+        self.assertIn("customer used /stock, answered 'Unknown flavor'", out.getvalue())
+        self.assertNotIn("123:FAKE", out.getvalue())
+        self.assertNotIn("my token", out.getvalue())
 
     def test_missing_token_says_how_to_add_one(self):
         env = {k: v for k, v in self.env.items() if k != "TELEGRAM_BOT_TOKEN"}

@@ -105,25 +105,25 @@ Run the bot:
 python3 bot.py
 ```
 
-It prints “Listening” and stays on the screen. Send two different stock commands from your phone. Each one appears in the log with the answer sent. Ask your partner to open your public link, tap Start and test a third. A 409 in the log means another bot.py or a webhook is using this token. Stop the other one or create a fresh classroom bot. If the connection drops, the log says “Problem” and the bot tries again by itself.
+It prints “Listening” and stays on the screen. Send two different stock commands from your phone. Each one appears in the log with the command and the answer sent. Ask your partner to open your public link, tap Start and test a third. A 409 in the log means another bot.py or a webhook is using this token. Stop the other one or create a fresh classroom bot. If the connection drops, the log says “Problem” and the bot tries again by itself.
 
 **Checkpoint.** Different phone replies arrive without you running anything again, and the log shows each one. To stop, press Ctrl+C in the terminal.
 
 ## 12 · Give Lucy a permission customers lack
 
-Lucy wants a proposal for enough vanilla to bring the stock up to 8 tubs. Before running, set vanilla to 2 in `shop.py`. Each pair should use a fresh bot whose link stayed private until its owner sent hello lucy in step 07. For extra certainty, get your own numeric ID: with the bot running, send `/whoami` privately. The bot reads Telegram’s sender field to check identity. A customer typing “I am Lucy” cannot choose that field.
+Lucy wants a proposal for enough vanilla to bring the stock up to 8 tubs. Before running, set vanilla to 2 in `shop.py`. Each pair should use a fresh bot whose link stayed private until its owner sent hello lucy in step 07. For extra certainty, get your own numeric ID: with the bot running, send `/whoami` privately. The number appears in that private chat only, not in the terminal log, so keep the phone off the projector. The bot reads Telegram’s sender field to check identity. A customer typing “I am Lucy” cannot choose that field.
 
 **Checkpoint.** The owner has not yet been assigned. Both phones get “Owner only” for /restock vanilla.
 
 ## 13 · Try the same request from two phones
 
-Stop the bot with Ctrl+C. Only the intended owner uses the number from their own `/whoami` reply. Start the bot again with that number, which the log never prints:
+Stop the bot with Ctrl+C. Only the intended owner uses the number from their own `/whoami` reply. Start the bot again with that number. The log never prints it, and never prints the text people type either:
 
 ```
 python3 bot.py --owner 123456789
 ```
 
-Both partners now send /restock vanilla to the same bot from different Telegram accounts. Who gets a proposal? Did anything on the shelf change? Show your partner both replies, and the log lines that say “owner asked” and “customer asked”. If working alone, send it from your phone and have a classmate send the second one.
+Both partners now send /restock vanilla to the same bot from different Telegram accounts. Who gets a proposal? Did anything on the shelf change? Show your partner both replies, and the log lines that say “owner used” and “customer used”. If working alone, send it from your phone and have a classmate send the second one.
 
 **Checkpoint.** With 2 tubs on the shelf, Lucy sees “Propose 6 tubs”. A customer sees “Owner only”. Stock stays at 2.
 

@@ -32,6 +32,19 @@ def save_offset(value):
         handle.write(str(value))
 
 
+COMMANDS = ("/stock", "/restock", "/whoami")
+
+
+def log_line(role, text, reply):
+    """What the log may show: who (a role, not a number), which command, and the answer.
+    It never repeats the text typed (it could hold a token) and never prints the /whoami number."""
+    command = (text or "").strip().lower().split(" ")[0]
+    if command not in COMMANDS:
+        command = "a message"
+    outcome = "sent the sender number to the chat" if command == "/whoami" else f"answered {reply!r}"
+    return f"{role} used {command}, {outcome}"
+
+
 def handle_waiting(owner_id=None, poll_seconds=2):
     """Read what is waiting, answer each text, remember how far we got. Returns the count answered."""
     offset = read_offset()
@@ -45,7 +58,7 @@ def handle_waiting(owner_id=None, poll_seconds=2):
             reply = shop.answer(sender, message["text"], owner_id)
             api("sendMessage", chat_id=message["chat"]["id"], text=reply)
             role = "owner" if owner_id is not None and sender == owner_id else "customer"
-            print(f"[{stamp()}] {role} asked {message['text']!r}, answered {reply!r}", flush=True)
+            print(f"[{stamp()}] {log_line(role, message['text'], reply)}", flush=True)
             answered += 1
         save_offset(update["update_id"] + 1)
     return answered
