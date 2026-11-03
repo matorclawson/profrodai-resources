@@ -22,7 +22,7 @@ The class is about one idea: a shop assistant that tells everyone how many tubs 
 
 [Open in a Codespace](https://codespaces.new/profrodai/profrodai-resources?devcontainer_path=.devcontainer/itam-lucy-mantle/devcontainer.json)
 
-When it is ready, open a terminal and run `bash run.sh`. It runs the offline tests, trains the agent and starts the Inspector on port 5010.
+When it is ready, open a terminal and run `bash run.sh`. It runs the offline tests, trains the agent and starts the Inspector on port 5010. Before it starts the Inspector it prints the address to open, which is a long https address ending in `inspect.html?projectUrl=...&channel=inspector`. Open that one. The `localhost` address that rasa prints after it works only inside the Codespace, not in your browser. The page is private to your GitHub account.
 
 ## Who is Lucy
 

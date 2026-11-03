@@ -21,7 +21,7 @@
   "portsAttributes": {
     "5010": {
       "label": "Mantle Inspector",
-      "onAutoForward": "silent"
+      "onAutoForward": "notify"
     }
   },
   "secrets": {
