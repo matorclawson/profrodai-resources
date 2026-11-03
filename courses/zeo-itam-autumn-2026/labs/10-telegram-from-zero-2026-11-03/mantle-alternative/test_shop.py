@@ -7,6 +7,8 @@ import shop
 class ShelfTests(unittest.TestCase):
     def setUp(self):
         self.saved = dict(shop.INVENTORY)
+        # Exercise a fixed unit-test shelf; keep the instructor's edited shelf intact.
+        shop.INVENTORY["vanilla"] = 2
         os.environ["LUCY_PIN"] = "1234"
 
     def tearDown(self):
