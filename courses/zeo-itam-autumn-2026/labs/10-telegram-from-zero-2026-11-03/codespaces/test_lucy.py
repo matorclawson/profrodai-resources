@@ -145,7 +145,7 @@ class LucyTests(unittest.TestCase):
         self.say(OWNER, "propose vanilla")
         shown = self.latest_id()
         class Owner:
-            session_id, text = "telegram:1234:%d" % OWNER, "yes go ahead"
+            session_id, text, work_id = "telegram:1234:%d" % OWNER, "yes go ahead", -1  # a later message than the proposal's
         self.lucy.assignment = Owner()
         reply = self.lucy.approve_restock("0" * 32)
         self.assertIn("not the proposal shown", reply)
