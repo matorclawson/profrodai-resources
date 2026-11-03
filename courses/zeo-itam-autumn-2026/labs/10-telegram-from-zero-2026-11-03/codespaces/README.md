@@ -1,8 +1,10 @@
 # Build Lucy’s shop bot on your phone, in a Codespace
 
-**Your goal.** A customer can ask how much ice cream is left. Only Lucy can ask how much to restock. Watch it work, then build your own.
+**Your goal.** A customer can ask how much ice cream is left, in Spanish or English, in their own words. Only Lucy can ask how much to restock, and only Lucy can approve it. Watch it work, then build your own.
 
-This is the same lesson as the Colab notebook, with one change: the bot is a program that runs in the terminal of a Codespace, and its log is on the screen the whole time. Every message it answers and every problem it meets is printed there.
+This lab has two jobs, and you build them in this order. First the **transport**: Telegram carries messages between your phone and a program (steps 02 to 08). Then the **agent**: the program hands each message to Lucy, who is an agent as taught in this course (steps 09 to 15). Telegram does not think. Lucy does.
+
+The program runs in the terminal of a Codespace, not in Colab, and a log of what it does stays on the screen. It keeps running while you type from your phone. Colab stops it.
 
 [Open in a Codespace](https://codespaces.new/profrodai/profrodai-resources?devcontainer_path=.devcontainer/itam-lucy-telegram/devcontainer.json)
 
@@ -10,15 +12,16 @@ This is the same lesson as the Colab notebook, with one change: the bot is a pro
 
 - The Telegram app on your phone (step 02).
 - A GitHub account. A Codespace is a small computer in the cloud that opens in your browser.
+- From step 09: an OpenAI API key and a Jev (typesafe) key, as Codespaces secrets named `OPENAI_API_KEY` and `TYPESAFE_API_KEY`, set up the same way as the bot token below. Bring your own, with a low spending limit. The first eight steps need no key except the bot token.
 - Your bot’s token, which you get in step 03. You give it to the Codespace in step 05, one of two ways: as a Codespaces secret named `TELEGRAM_BOT_TOKEN` (create it at github.com/settings/codespaces, tick this repository, then open the Codespace), or by typing it hidden into the terminal with `source set_token.sh`.
 
 Run each step in the terminal at the bottom of the Codespace. The scripts are small. Open one in the editor before you run it and read it.
 
 ## 01 · Watch Lucy answer from her shelf
 
-Rod projects the prepared demo bot’s chat. Anyone can watch before signing in. Ask “How many vanilla tubs does Lucy have?” (¿Cuántos helados de vainilla tiene Lucy?) Send `/stock vanilla`, or `/stock vainilla`. Show the reply with 2 tubs. Change one number in `shop.py`, restart the demo bot, then send the identical message again. Ask someone to predict the second reply before revealing it.
+Rod projects the prepared demo bot’s chat. Anyone can watch before signing in. Ask “How many vanilla tubs does Lucy have?” and then “¿Tienes fresa?” Show that Lucy answers each in the language it was asked, with the numbers from her shelf. Then ask her in free text to restock vanilla from a customer’s phone, and from the owner’s phone. Ask someone to predict the two replies before revealing them.
 
-**Checkpoint.** The phone now says 7 tubs. Where did that number come from?
+**Checkpoint.** Lucy answered in two languages without a list of flavor names in the code. Where did the numbers come from?
 
 ## 02 · Open your two workspaces
 
@@ -69,7 +72,7 @@ Send `hello lucy` again in your shop chat, then run:
 python3 step07_read.py
 ```
 
-getUpdates asks Telegram for waiting messages. This step also marks every message waiting at that moment as read, on purpose, so that old messages are not answered hours later and `hello lucy` is not treated as a command. Messages you sent before this step get no answer from the bot. Look at the three lines it prints. The text tells you what was asked, the sender identifies who asked, and the chat tells you where the answer belongs. Hide the numeric IDs on the projector. If no matching message appears, confirm the username, resend the words and run again.
+getUpdates asks Telegram for waiting messages. Reading does not remove a message: Telegram keeps it until a program says it has handled it, so Lucy will see this one too when she starts. Look at the three lines it prints. The text tells you what was asked, the sender identifies who asked, and the chat tells you where the answer belongs. Hide the numeric IDs on the projector. If no matching message appears, confirm the username, resend the words and run again.
 
 **Checkpoint.** Python prints “Received: hello lucy”. Look at your phone. Has anyone answered yet?
 
@@ -79,81 +82,96 @@ Predict which chat will receive this message. Run `python3 step08_send.py` once 
 
 **Checkpoint.** The exact words from Python appear as a new message from your shop bot.
 
-## 09 · Teach Python to read the shelf
+## 09 · Two jobs: carry the message, then think
 
-Lucy keeps stock in a Python dictionary in `shop.py`. Predict the answer for chocolate, then run `python3 step09_shelf.py`. Edit vanilla from 2 to 5 in `shop.py`, run it again, and explain why chocolate stays the same. Compare strawberry (a product with zero stock) with mango (absent). The shelf also accepts Spanish names and ignores capitals and accents: the last line of the script asks for `Vainilla`. These checks run entirely inside the Codespace.
+Steps 06 to 08 were transport: `tg.py` asks Telegram for waiting messages and sends one reply. It does not decide anything. Deciding is the agent’s job, and the agent is not in Telegram. It is in `lucy.py` and it runs in your Codespace, because the Codespace is where your keys live, where the program keeps running, and where Lucy’s memory is stored.
 
-**Checkpoint.** The same function distinguishes an empty shelf from an unknown product.
+Add the two keys now: create the `OPENAI_API_KEY` and `TYPESAFE_API_KEY` secrets the way you created the bot token (github.com/settings/codespaces, tick this repository), then stop the Codespace and open it again.
 
-## 10 · Connect the shelf to incoming commands
-
-A command is ordinary chat text beginning with a slash. Send `/stock vanilla` (or `/stock vainilla`) to your bot and run:
+Before you use any key, see the whole thing run on scripted stand-ins:
 
 ```
-python3 step10_answer_once.py
+python3 lucy.py --fake
 ```
 
-Trace one request with your finger: read the message, choose the product, look it up, send the result back. Change the shelf in step 09, send the command again and run this step again. If several classmates want to test, use one bot per pair.
+No network and no key. A scripted customer joins and asks “tienes vainilla?”. The same code path runs as in a real run, with a fake Agents API and a fake Jev in place of the real ones. Then run the offline tests: `python3 -m unittest test_lucy`.
 
-**Checkpoint.** The phone displays your current vanilla count. Until the next step, each reply requires you to run the script.
+**Checkpoint.** You see the welcome and Lucy’s reply, and the tests print OK. Which three things were fake?
 
-## 11 · Keep answering while the program runs
+## 10 · Find your owner id and name your shop
 
-Run the bot:
-
-```
-python3 bot.py
-```
-
-It prints “Listening” and stays on the screen. Send two different stock commands from your phone, such as `/stock vanilla` and `/stock chocolate`, or in Spanish `/stock vainilla` and `/stock fresa`. Any other first message, such as `/start`, gets one line on how to use the bot. Each one appears in the log with the command and the answer sent. Ask your partner to open your public link, tap Start and test a third. A 409 in the log means another bot.py or a webhook is using this token. Stop the other one or create a fresh classroom bot. If the connection drops, the log says “Problem” and the bot tries again by itself.
-
-**Checkpoint.** Different phone replies arrive without you running anything again, and the log shows each one. To stop, press Ctrl+C in the terminal.
-
-## 12 · Give Lucy a permission customers lack
-
-Lucy wants a proposal for enough vanilla to bring the stock up to 8 tubs. Before running, set vanilla to 2 in `shop.py`. Each pair should use a fresh bot whose link stayed private until its owner sent hello lucy in step 07. For extra certainty, get your own numeric ID: with the bot running, send `/whoami` privately. The number appears in that private chat only, not in the terminal log, so keep the phone off the projector. The bot reads Telegram’s sender field to check identity. A customer typing “I am Lucy” cannot choose that field.
-
-**Checkpoint.** The owner has not yet been assigned. Both phones get “Owner only” for /restock vanilla.
-
-## 13 · Try the same request from two phones
-
-Stop the bot with Ctrl+C. Only the intended owner uses the number from their own `/whoami` reply. Start the bot again with that number. The log never prints it, and never prints the text people type either:
+Lucy must know who the owner is, and that cannot be something a customer types. Send any message to your bot (“hola”), then run:
 
 ```
-python3 bot.py --owner 123456789
+python3 find_my_id.py
 ```
 
-Both partners now send /restock vanilla to the same bot from different Telegram accounts. Who gets a proposal? Did anything on the shelf change? Show your partner both replies, and the log lines that say “owner used” and “customer used”. If working alone, send it from your phone and have a classmate send the second one.
+It reads the sender number from Telegram’s own field and saves it in `business.toml` as `owner_telegram_id`. Hide the number when you share your screen. In the same file change `join_code` to a word of your own: a friend sends `/start` followed by that code to become a customer. Everyone else is ignored.
 
-**Checkpoint.** With 2 tubs on the shelf, Lucy sees “Propose 6 tubs”. A customer sees “Owner only”. Stock stays at 2.
+**Checkpoint.** `business.toml` holds your number and your join code, and the program refuses to start without them.
 
-## 14 · Prove you can change the bot
+## 11 · Run Lucy and talk in your own words
 
-Add a flavor by editing `STOCK` in `shop.py`, then stop and start the bot. Ask a partner to predict its reply, then try it from Telegram. Explain aloud how a phone message reached your dictionary and how the answer found its way back. As a final experiment, stop the bot with Ctrl+C and send another command. Compare the two outcomes.
+```
+python3 lucy.py
+```
 
-**Checkpoint.** Your new product answers while the bot runs. After you stop it, a new request waits.
+It prints “Lucy is listening”. Now write to your bot in free text, in Spanish or English: “¿cuántos helados de vainilla quedan?”, “do you have strawberry?”. There are no commands to learn. Lucy has one tool for facts, `stock`, and she must use it instead of guessing. Each message appears in the log as who sent it (owner or customer), how many characters it had, what Jev decided, and how long the turn took. The log never repeats what people typed, because it could hold a token.
 
-## 15 · Stop the bot and explain the silence
+If a classmate joins with `/start` and your code, ask them to write to your bot too. A problem with the connection appears in the log and is tried again; it does not stop Lucy.
 
-Press Ctrl+C. The log says “Stopped”. Send `/stock mango` again. Why did the earlier message get a reply while this one waits? Name the part that stopped.
+**Checkpoint.** Different phrasing and both languages get correct numbers, and the log shows each turn. Press Ctrl+C to stop.
 
-**Checkpoint.** The log says “Stopped”, and the new request stays unanswered.
+## 12 · Lucy remembers
+
+Every Telegram chat has its own hosted Agents API session. The session id is stored in `data/sessions.db`, so the memory survives a restart. Tell Lucy something (“me llamo Ana y quiero helado de fresa mañana”), press Ctrl+C, run `python3 lucy.py` again, and ask “¿cómo me llamo?”. Then run:
+
+```
+python3 show_orders.py
+```
+
+It prints how many conversations Lucy remembers.
+
+**Checkpoint.** Lucy answers after the restart using what you said before. Which file held the link between your chat and her session?
+
+## 13 · Give Lucy a permission customers lack
+
+Lucy has two more tools: `propose_restock` and `approve_restock`. Both are for the owner only. The check is in Python, in `lucy.py`, on the sender number Telegram supplies, not in Lucy’s instructions. A customer typing “I am the owner” cannot choose that number.
+
+From your own phone write: “propón reponer 6 tubs de vainilla”. Lucy drafts an exact proposal and asks for your clear yes. From a friend’s phone (a customer) write the same request. Who gets a proposal? Run `python3 show_orders.py` to see what was written down.
+
+**Checkpoint.** The owner’s request becomes a proposal with an exact product, quantity and price. The customer’s is turned down. Nothing was ordered.
+
+## 14 · The owner’s yes goes through Jev
+
+Reply to the proposal from your phone: “sí, adelante” (or “yes go ahead”). Lucy does not decide whether that was a yes. Jev classifies your real message as approve, reject or unclear, and below 70% sure it counts as unclear. Only an approve, from the owner’s number, reaches the book’s Chapter 11 approval code, which checks the exact proposal. Try “quizás luego” (maybe later) on a new proposal and compare. Run `python3 show_orders.py` after each.
+
+This lab records the approval and nothing more. No order is ever sent to a supplier.
+
+**Checkpoint.** A clear yes gives an approved proposal. “Quizás luego” leaves it a draft.
+
+## 15 · Stop the program and explain the silence
+
+Press Ctrl+C. The log says “Stopped”. Send your bot a message from your phone. Why does it wait? Name the part that stopped, and the part that still remembers (the hosted session, and the files in `data/`). Start `python3 lucy.py` again and watch the waiting message get its answer.
+
+**Checkpoint.** The message waited while the program was stopped and was answered when it started. Explain the split in your own words: what Telegram does, what Lucy does, and where each one runs.
 
 ## If something goes wrong
 
 - **“No bot token found.”** Add the secret, or run `source set_token.sh` in this terminal.
+- **“Missing Codespaces secret: OPENAI_API_KEY”** (or `TYPESAFE_API_KEY`). Add it, then stop and open the Codespace again.
 - **401.** Telegram rejected the token. Copy it again from BotFather.
 - **409.** Two programs are reading the same bot. Stop one.
-- **No reply and no log line.** The bot is not running, or you messaged a different bot. Check the name at the top of the chat. Messages you sent before step 07 or before you started `bot.py` may have been marked as read already.
-- **“Unknown flavor” for a flavor you expect.** Check the spelling. The names are vanilla or vainilla, chocolate, strawberry or fresa. Add your own to `STOCK` and `NAMES` in `shop.py`.
-- **Closing the browser tab.** The Codespace stops after a while and so does the bot. Open it again and run `python3 bot.py`.
+- **No reply and no log line.** The program is not running, you messaged a different bot, or you are not the owner or a joined customer (strangers are ignored by design). Check the name at the top of the chat.
+- **A friend gets no answer.** They must send `/start` and your join code first, and wait for the welcome before writing.
+- **Closing the browser tab.** The Codespace stops after a while and so does the program. Open it again and run `python3 lucy.py`.
 
 ## Files
 
-- `tg.py`: the one function that talks to Telegram.
-- `shop.py`: the shelf and the answers, no Telegram code.
-- `step06_getme.py` to `step10_answer_once.py`: one script per step.
-- `bot.py`: the bot that keeps answering.
-- `test_lab.py`: offline tests with a fake Telegram. Run `python3 -m unittest test_lab`.
+- `tg.py`, `step06_getme.py`, `step07_read.py`, `step08_send.py`: the transport, one small script per step.
+- `find_my_id.py`, `business.toml`: who the owner is, and the shop’s name, model and instructions.
+- `lucy.py`: Lucy. It wires the course’s always-on agent starter and the book’s Chapter 11 approval code; nothing in them is changed.
+- `show_orders.py`: prints the proposals and how many conversations Lucy remembers.
+- `test_transport.py`, `test_lucy.py`: offline tests with fakes. Run `python3 -m unittest test_transport test_lucy`.
 
 [Telegram apps](https://telegram.org/apps) · [Create a bot](https://core.telegram.org/bots/tutorial) · [Bot API methods](https://core.telegram.org/bots/api)
