@@ -294,6 +294,25 @@ class LucyTests(unittest.TestCase):
             self.lucy.guarded_round(sleep=lambda seconds: None)
         self.assertEqual(self.status(), ["DRAFT"])
 
+    def test_the_shown_time_is_the_date_in_telegrams_own_receipt_when_it_has_one(self):
+        real = self.bot.call
+        def wrapper(method, data):
+            result = real(method, data)
+            if method == "sendMessage" and str(data.get("text", "")).startswith("Proposal "):
+                return {"message_id": 7, "date": 1_000_500}  # the shape of Telegram's Message object
+            return result
+        self.bot.call = wrapper
+        self.say(OWNER, "propose vanilla")
+        self.assertEqual(self.lucy.db.connection.execute("SELECT presented_at FROM lucy_pending").fetchone()["presented_at"], 1_000_500)
+        self.push(OWNER, "yes go ahead", date=1_000_500)  # not later than the shown time
+        for _ in range(4):
+            self.lucy.guarded_round(sleep=lambda seconds: None)
+        self.assertEqual(self.status(), ["DRAFT"])
+        self.push(OWNER, "yes go ahead", date=1_000_501)
+        for _ in range(4):
+            self.lucy.guarded_round(sleep=lambda seconds: None)
+        self.assertEqual(self.status(), ["APPROVED"])
+
     def test_an_unclear_answer_does_not_approve(self):
         self.say(OWNER, "propose vanilla")
         self.say(OWNER, "maybe later")
