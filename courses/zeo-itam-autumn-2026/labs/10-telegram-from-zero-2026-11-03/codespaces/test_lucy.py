@@ -32,6 +32,7 @@ class LucyTests(unittest.TestCase):
         self.Fakes = (FakeAgentsClient, FakeJev, FakeMessenger)
         self.scratch = tempfile.TemporaryDirectory()
         self.lucy = None
+        self.t = 1_000_000
         self.bot = FakeMessenger()
         self.agent = FakeAgentsClient(self.script)
         sessions = self.agent.beta.agents.sessions
@@ -47,7 +48,7 @@ class LucyTests(unittest.TestCase):
         if self.lucy:
             self.lucy.close()
         self.lucy = lucy.Lucy(self.parts, self.config, self.bot, self.agent, self.jev, make_question=lambda: {},
-                              approval_question=lambda: {}, sleep=lambda seconds: None)
+                              approval_question=lambda: {}, sleep=lambda seconds: None, now=lambda: self.t)
 
     def tearDown(self):
         self.lucy.close()
@@ -69,8 +70,14 @@ class LucyTests(unittest.TestCase):
     def status(self):
         return [r[0] for r in self.lucy.db.connection.execute("SELECT status FROM assistant_orders")]
 
-    def say(self, user, text, rounds=4):
+    def push(self, user, text, date=None):
+        """A message with a Telegram date. By default 10 seconds after the last one."""
+        self.t += 10
         self.bot.push(user, text)
+        self.bot.updates[-1]["message"]["date"] = self.t if date is None else date
+
+    def say(self, user, text, rounds=4):
+        self.push(user, text)
         for _ in range(rounds):
             self.lucy.guarded_round(sleep=lambda seconds: None)
 
@@ -208,8 +215,8 @@ class LucyTests(unittest.TestCase):
         self.assertEqual(statuses[second], "DRAFT")
 
     def test_a_yes_in_the_same_poll_as_the_proposal_approves_nothing_until_it_was_shown(self):
-        self.bot.push(OWNER, "propose vanilla")
-        self.bot.push(OWNER, "yes go ahead")
+        self.push(OWNER, "propose vanilla")
+        self.push(OWNER, "yes go ahead")
         self.lucy.guarded_round(sleep=lambda seconds: None)
         self.assertEqual(self.status(), ["DRAFT"])
         self.assertTrue(any("not been shown" in str(r) for r in self.tool_results()))
@@ -232,6 +239,28 @@ class LucyTests(unittest.TestCase):
         self.lucy.db.connection.execute("UPDATE lucy_pending SET presented=0")
         self.lucy.db.connection.commit()
         self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["DRAFT"])
+
+    def test_a_yes_sent_before_the_proposal_was_shown_approves_nothing_even_if_it_arrives_later(self):
+        self.push(OWNER, "propose vanilla")
+        self.lucy.guarded_round(sleep=lambda seconds: None)  # the proposal is drafted and shown at the current time
+        self.lucy.guarded_round(sleep=lambda seconds: None)
+        shown_at = self.lucy.db.connection.execute("SELECT presented_at FROM lucy_pending").fetchone()["presented_at"]
+        self.assertGreater(shown_at, 0)
+        self.push(OWNER, "yes go ahead", date=shown_at - 1)  # typed before the owner could have seen the proposal
+        for _ in range(4):
+            self.lucy.guarded_round(sleep=lambda seconds: None)
+        self.assertEqual(self.status(), ["DRAFT"])
+        self.assertTrue(any("sent before the proposal was shown" in str(r) for r in self.tool_results()))
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["APPROVED"])
+
+    def test_a_message_with_no_known_date_cannot_approve(self):
+        self.say(OWNER, "propose vanilla")
+        self.push(OWNER, "yes go ahead")
+        del self.bot.updates[-1]["message"]["date"]
+        for _ in range(4):
+            self.lucy.guarded_round(sleep=lambda seconds: None)
         self.assertEqual(self.status(), ["DRAFT"])
 
     def test_an_unclear_answer_does_not_approve(self):
