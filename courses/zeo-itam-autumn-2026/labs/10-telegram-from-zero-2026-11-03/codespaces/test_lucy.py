@@ -171,6 +171,18 @@ class LucyTests(unittest.TestCase):
         self.say(OWNER, "yes go ahead")
         self.assertEqual(self.status(), ["APPROVED"])
 
+    def test_a_yes_in_the_same_message_that_made_the_proposal_approves_nothing(self):
+        self.say(OWNER, "propose vanilla")
+        row = self.lucy.db.connection.execute("SELECT chat, proposal_id, work_id FROM lucy_pending").fetchone()
+        class SameMessage:
+            session_id, text, work_id = row["chat"], "propose vanilla and yes go ahead", row["work_id"]
+        self.lucy.assignment = SameMessage()
+        self.assertIn("new message", self.lucy.approve_restock(row["proposal_id"]))
+        self.lucy.assignment = None
+        self.assertEqual(self.status(), ["DRAFT"])
+        self.say(OWNER, "yes go ahead")
+        self.assertEqual(self.status(), ["APPROVED"])
+
     def test_an_unclear_answer_does_not_approve(self):
         self.say(OWNER, "propose vanilla")
         self.say(OWNER, "maybe later")

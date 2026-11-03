@@ -90,7 +90,7 @@ class Lucy:
         self.db.migrate("orders", parts["approval"]["ORDER_MIGRATIONS"])
         self.db.connection.row_factory = parts["approval"]["named_rows"]
         with self.db.immediate() as connection:
-            connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL)")
+            connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL, work_id INTEGER NOT NULL)")
         self.enrollment = parts["Enrollment"](str(data / "enrolled.db"))
         self.wrapped = parts["EnrollBot"](bot, self.enrollment, config["join_code"], config["welcome"])
         self.assignment = None
@@ -136,7 +136,7 @@ class Lucy:
         chat = self.assignment.session_id
         self._supersede(chat, proposal_id)
         with self.db.immediate() as connection:
-            connection.execute("INSERT OR REPLACE INTO lucy_pending VALUES (?,?,?)", (chat, proposal_id, row["digest"]))
+            connection.execute("INSERT OR REPLACE INTO lucy_pending VALUES (?,?,?,?)", (chat, proposal_id, row["digest"], self.assignment.work_id))
         proposal = json.loads(row["proposal"])
         log.info("owner proposal drafted for %s x %s", proposal["sku"], proposal["quantity"])
         return {"proposal_id": proposal_id, "sku": proposal["sku"], "quantity": proposal["quantity"], "total_cents": row["amount"],
@@ -155,9 +155,11 @@ class Lucy:
             return OWNER_ONLY
         connection = self.db.connection
         chat = self.assignment.session_id
-        pending = connection.execute("SELECT proposal_id, digest FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
+        pending = connection.execute("SELECT proposal_id, digest, work_id FROM lucy_pending WHERE chat=?", (chat,)).fetchone()
         if pending is None:
             return "Nothing is waiting for the owner's yes. Ask for a proposal first."
+        if pending["work_id"] == self.assignment.work_id:
+            return "Not approved: the owner must say yes in a new message, after seeing the proposal."
         if proposal_id != pending["proposal_id"]:
             return "Not approved: that is not the proposal shown to the owner. The proposal waiting is " + pending["proposal_id"] + "."
         order = connection.execute("SELECT id, proposal, digest, status FROM assistant_orders WHERE id=?", (proposal_id,)).fetchone()
