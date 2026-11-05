@@ -8,12 +8,25 @@ Offline tests:               python3 -m unittest test_tour
 Set RASA_URL (for example http://127.0.0.1:5005) and plain text goes to a Rasa agent through its REST channel; the commands stay.
 """
 import os
+import re
 import time
 
 from rasa_bridge import RASA_URL, RasaError, ask_rasa
 from tg import TelegramError, api
 
-OWNER_ID = int(os.environ.get("TOUR_OWNER_ID", "0") or 0)   # Telegram id of the owner; find_my_id.py prints yours
+def _owner_id():
+    """The owner's Telegram id: TOUR_OWNER_ID if set, else the owner_telegram_id that find_my_id.py saved in business.toml, else 0 (nobody)."""
+    if os.environ.get("TOUR_OWNER_ID"):
+        return int(os.environ["TOUR_OWNER_ID"])
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "business.toml")) as handle:
+            found = re.search(r"^owner_telegram_id = (\d+)", handle.read(), flags=re.M)
+        return int(found.group(1)) if found else 0
+    except OSError:
+        return 0
+
+
+OWNER_ID = _owner_id()
 PHOTO = "https://telegram.org/img/t_logo.png"
 COMMANDS = [("buttons", "Inline buttons and callbacks"), ("approve", "Owner-only approval buttons"),
             ("progress", "Edit one message to show progress"), ("poll", "Send a poll"),
