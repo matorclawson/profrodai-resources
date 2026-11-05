@@ -5,10 +5,12 @@ Offline tests:               python3 -m unittest test_tour
 /commands  the command menu     /buttons  inline keyboard and a callback     /approve  owner-only buttons
 /progress  one message edited in place     /poll  a poll     /where  location button     /photo  a picture
 /webhook   polling or webhook?   /group  what a bot sees in a group
+Set RASA_URL (for example http://127.0.0.1:5005) and plain text goes to a Rasa agent through its REST channel; the commands stay.
 """
 import os
 import time
 
+from rasa_bridge import RASA_URL, RasaError, ask_rasa
 from tg import TelegramError, api
 
 OWNER_ID = int(os.environ.get("TOUR_OWNER_ID", "0") or 0)   # Telegram id of the owner; find_my_id.py prints yours
@@ -74,7 +76,7 @@ def on_callback(call, query):
     call("editMessageText", chat_id=chat, message_id=message_id, text=text)
 
 
-def handle(call, update, sleep=time.sleep):
+def handle(call, update, sleep=time.sleep, rasa=None):
     if "callback_query" in update:
         on_callback(call, update["callback_query"])
     elif "poll_answer" in update:
@@ -83,6 +85,13 @@ def handle(call, update, sleep=time.sleep):
         message = update["message"]
         if message.get("text", "").startswith("/"):
             on_command(call, message, sleep)
+        elif rasa and message.get("text") and message["chat"].get("type") == "private":
+            try:
+                replies = rasa(message["chat"]["id"], message["text"])
+            except RasaError:
+                replies = ["I could not reach the Rasa agent just now. The tour commands still work. Type / to see them."]
+            for reply in replies:
+                say(call, message["chat"]["id"], reply)
         elif "location" in message:
             say(call, message["chat"]["id"], "Got a location. The bot receives latitude and longitude; this demo does not store them.",
                 reply_markup={"remove_keyboard": True})
@@ -99,7 +108,7 @@ def main():
             for update in api("getUpdates", offset=offset, timeout=30, allowed_updates=ALLOWED):
                 offset = update["update_id"] + 1
                 try:
-                    handle(api, update)
+                    handle(api, update, rasa=ask_rasa if RASA_URL else None)
                 except TelegramError as error:
                     print("Telegram refused one request:", error)
     except KeyboardInterrupt:
