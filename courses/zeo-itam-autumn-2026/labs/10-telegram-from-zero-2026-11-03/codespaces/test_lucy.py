@@ -392,5 +392,39 @@ class LucyTests(unittest.TestCase):
         self.assertNotIn("123:", text)
 
 
+class TourInLucyTests(LucyTests):
+    """The same bot with the tour switched on: buttons and commands are answered without the model, text still goes to Lucy."""
+
+    def build(self):
+        self.api_calls = []
+
+        def api(method, **params):
+            self.api_calls.append((method, params))
+            return {"username": "LucyShop_bot"} if method == "getMe" else {"message_id": 5}
+
+        if self.lucy:
+            self.lucy.close()
+        self.lucy = lucy.Lucy(self.parts, self.config, self.bot, self.agent, self.jev, make_question=lambda: {},
+                              approval_question=lambda: {}, sleep=lambda seconds: None, now=lambda: self.t,
+                              tour_tools=(api, lambda *a, **k: None))
+
+    def test_a_command_and_a_button_never_reach_the_model_but_text_does(self):
+        self.bot.push(FRIEND, "/start CODE")
+        self.lucy.guarded_round()
+        self.bot.updates.append({"update_id": 90, "message": {"message_id": 90, "from": {"id": FRIEND, "is_bot": False},
+                                                             "chat": {"id": FRIEND, "type": "private"}, "text": "/menu"}})
+        self.bot.updates.append({"update_id": 91, "callback_query": {"id": "q", "from": {"id": FRIEND}, "data": "flavors",
+                                                                     "message": {"message_id": 3, "chat": {"id": FRIEND}}}})
+        self.bot.push(FRIEND, "tienes vainilla?", update_id=92)
+        sessions_before = len(self.agent.sessions_made)
+        for _ in range(4):
+            self.lucy.guarded_round()
+        methods = [m for m, _ in self.api_calls]
+        self.assertIn("sendMessage", methods)
+        self.assertIn("editMessageText", methods)
+        self.assertEqual(len(self.agent.sessions_made), sessions_before + 1)  # one session, for the one text message
+        self.assertEqual(self.lucy.session.__class__.__name__, "AgentSession")
+
+
 if __name__ == "__main__":
     unittest.main()

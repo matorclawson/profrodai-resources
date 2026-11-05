@@ -95,7 +95,7 @@ class PresentationBot:
 class Lucy:
     """The agent, its tools, and the owner check. The check is Python on Telegram's sender id, not the model's opinion."""
 
-    def __init__(self, parts, config, bot, agent_client, jev, *, make_question=None, approval_question=make_approval_question, now=time.time, sleep=time.sleep):
+    def __init__(self, parts, config, bot, agent_client, jev, *, make_question=None, approval_question=make_approval_question, now=time.time, sleep=time.sleep, tour_tools=None):
         self.p, self.config, self.bot, self.jev, self.now = parts, config, bot, jev, now
         self.approval_question = approval_question
         self.owner_id = int(config["owner_telegram_id"])
@@ -111,7 +111,16 @@ class Lucy:
             connection.execute("CREATE TABLE IF NOT EXISTS lucy_used_yes (work_id INTEGER PRIMARY KEY)")
             connection.execute("CREATE TABLE IF NOT EXISTS lucy_pending (chat TEXT PRIMARY KEY, proposal_id TEXT NOT NULL, digest TEXT NOT NULL, work_id INTEGER NOT NULL, presented INTEGER NOT NULL DEFAULT 0, presented_at INTEGER NOT NULL DEFAULT 0)")
         self.enrollment = parts["Enrollment"](str(data / "enrolled.db"))
-        self.wrapped = parts["EnrollBot"](PresentationBot(bot, self), self.enrollment, config["join_code"], config["welcome"])
+        presented = PresentationBot(bot, self)
+        if tour_tools:  # buttons, polls, location and pictures, answered before the agent ever sees the update
+            sys.path.insert(0, str(HERE))
+            import tour
+            api, upload = tour_tools
+            wake_stock = lambda: wake["stock_rows"](self.db.connection)  # noqa: E731
+            presented = tour.Tour(presented, api, upload, owner_id=self.owner_id, known=self.enrollment.customers, stock=wake_stock,
+                                  shop={"lat": float(config.get("shop_lat", 19.4326)), "lon": float(config.get("shop_lon", -99.1332))},
+                                  pause=sleep)
+        self.wrapped = parts["EnrollBot"](presented, self.enrollment, config["join_code"], config["welcome"])
         self.assignment = None
         self.session = parts["AgentSession"](
             agent_client, str(data / "sessions.db"), model=config["model"], instructions=config["instructions"], tools=TOOL_SPECS,
@@ -282,6 +291,7 @@ def real_clients(channel):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--fake", action="store_true", help="scripted demo, no network, no keys")
+    parser.add_argument("--no-tour", action="store_true", help="text only: leave out buttons, polls, location and pictures")
     parser.add_argument("--config", default=str(HERE / "business.toml"))
     args = parser.parse_args()
     logging.basicConfig(format="[%(asctime)s] %(message)s", datefmt="%H:%M:%S", level=logging.INFO)
@@ -297,7 +307,8 @@ def main():
         raise SystemExit("No bot token found. Add the TELEGRAM_BOT_TOKEN Codespaces secret, or run: source set_token.sh")
     bot = parts["channel"]["Telegram"](token)
     agent_client, jev = real_clients(parts["channel"])
-    lucy = Lucy(parts, config, bot, agent_client, jev)
+    import tg
+    lucy = Lucy(parts, config, bot, agent_client, jev, tour_tools=None if args.no_tour else (lambda method, **params: tg.api(method, **params), tg.api_upload))
     log.info("Lucy is listening. Message your bot on Telegram. Press Ctrl+C to stop.")
     try:
         while True:

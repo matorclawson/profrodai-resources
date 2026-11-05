@@ -49,6 +49,27 @@ def api(method, **params):
     return result["result"]
 
 
+def api_upload(method, fields, file_field, filename, content, content_type="image/png"):
+    """A Bot API call that carries a file (sendPhoto, sendDocument). Plain multipart/form-data, standard library only."""
+    boundary = "----lucy" + os.urandom(8).hex()
+    parts = []
+    for name, value in fields.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'
+                 f"Content-Type: {content_type}\r\n\r\n".encode() + content + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    request = urllib.request.Request(f"{BASE}/bot{token()}/{method}", data=b"".join(parts),
+                                     headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(request, timeout=40) as response:
+            result = json.load(response)
+    except (OSError, ValueError):
+        raise TelegramError("The upload to Telegram failed. Check the connection.") from None
+    if not result.get("ok"):
+        raise TelegramError("Telegram refused the upload.")
+    return result["result"]
+
+
 def private_texts(updates):
     """Yield the text messages sent to the bot in a private chat."""
     for update in updates:
