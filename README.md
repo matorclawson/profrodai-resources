@@ -483,10 +483,10 @@ on its own without anything else in this repo.
 
 ## Current companion boundary
 
-The Transformation Tracker public companion remains live while its canonical import is only
-mapped. The existing `labs/01-baseline-delta` is explicitly its successor scaffold, not its
-replacement. The consolidation policy forbids archiving a legacy repository before a reviewed
-replacement and clear learner redirect exist.
+Transformation Tracker was retired from this catalog on November 9, 2026. Its runnable
+`labs/01-baseline-delta` scaffold has been removed. Only the historical source pin, license and
+migration records remain here; they promise no active successor import or learner destination.
+This catalog retirement does not assert that the separate upstream repository was archived.
 
 ## License
 
