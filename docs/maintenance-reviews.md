@@ -40,3 +40,8 @@ sow: public. This maintenance review was assigned by the maintainer’s operator
 **Locked dependencies (maintainer decision):** [Review, targeted Tornado patch, tests and all dependency decisions](maintenance-evidence/2026-11-08.md). Tornado 6.5.10 has three reported advisories fixed in 6.6; only that package changes in uv.lock. All 5 npm tests, TypeScript, patched course gate/21 learner checkpoints and 66 Tornado header tests pass; exact patched metadata reports no advisories/yank. npm lock and dependency declarations are unchanged. Maintainer review November 8; next due November 15.
 
 **Catalog provenance (operator acceptance pending):** [Actual current-main comparison and recommendation](maintenance-evidence/2026-11-08-catalog-provenance.md). The pinned catalog validates, but22 sources changed and 2 were removed against site main 2acd8964. The October 3 repin/remove/companion-framing follow-up remains uncompleted in reviewed main/open PRs. Operator dates stay unchanged until the operator answers. Full make verify stops at that existing overdue record; no waiver or complete gate pass is claimed.
+
+
+## 2026-11-09: operator acceptance of the November 8 catalog review
+
+sow: public. The operator accepted the [November 8 provenance review](maintenance-evidence/2026-11-08-catalog-provenance.md). [Acceptance and required separate correction](maintenance-evidence/2026-11-09-catalog-acceptance.md) record the boundary: review date November 8, next due December 9; repin the source index, remove the two retired sources and review the 22 changed pages in a separate pull request during the same week. The earlier pending entry and failed gate evidence remain historical records, not a claim that acceptance or the correction happened earlier.
