@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from channel_journal import BindingConflict, ChannelJournal
 from channel_runtime import (
     HeldOutcome, IncomingMessage, IncomingPage, PollCursor, PollingRuntime,
-    SendResult, current_binding, OutboundObservation, confirmed_send_sid,
+    SendResult, current_binding, OutboundObservation, confirmed_send_sid, InboundObservationRefusal,
 )
 
 
@@ -204,6 +204,32 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             await self.runtime.poll_once(deliver)
         self.assertIsNone(self.runtime.after)
         self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0], 0)
+
+    async def test_truncated_provider_window_refuses_then_restarts_at_same_cursor(self):
+        delivered = []
+        async def deliver(message):
+            delivered.append(message.message_sid)
+        seen = replace(self.message, message_sid="SM_9")
+        self.page(seen)
+        await self.runtime.poll_once(deliver)
+        saved = self.runtime.after
+        count = self.journal.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0]
+        self.broker.pages.append(InboundObservationRefusal(
+            "failed_safe", "REQUEST_REFUSED", "inbound_window_truncated"))
+        with self.assertRaises(HeldOutcome):
+            await self.runtime.poll_once(deliver)
+        self.assertEqual(self.runtime.after, saved)
+        self.assertEqual(self.broker.polls[-1][0], saved)
+        self.assertEqual(delivered, ["SM_9"])
+        self.assertEqual(self.broker.sends, [])
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0], count)
+        self.runtime = self.new_runtime()
+        late = replace(seen, message_sid="SM_2")
+        self.page(late, seen)
+        await self.runtime.poll_once(deliver)
+        self.assertEqual(self.broker.polls[-1][0], saved)
+        self.assertEqual(delivered, ["SM_9", "SM_2"])
+        self.assertEqual(self.runtime.after, saved)
 
     async def test_persisted_cursor_and_old_history_survive_restart_and_long_gap(self):
         delivered = []

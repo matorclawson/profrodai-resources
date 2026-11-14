@@ -11,7 +11,7 @@ Run the offline checks from this folder:
 python3 -m unittest discover -s tests -v
 ```
 
-They use Python's standard library and synthetic customer references. The 44
+They use Python's standard library and synthetic customer references. The 45
 checks cover concurrent pollers, process restart, cursor advancement, changed
 customer bindings, turn cancellation, and uncertain outcomes. They also check
 exact draft versions, separate affirmative replies, closed tool arguments, and
@@ -65,6 +65,10 @@ IDs deduplicate, and older seconds are refused as a transport-contract error.
 Page completeness must be explicit. An incomplete final second is deferred and
 reloaded whole after earlier complete seconds finish. If one second alone
 exceeds the page limit, stop and escalate without partial delivery.
+An unproven provider-history scan is different from response pagination. The
+transport must map `FAILED_SAFE` / `REQUEST_REFUSED` /
+`inbound_window_truncated` to a typed refusal with no page. It creates no claim,
+delivery or cursor change; a later observation reuses the same saved cursor.
 
 If a mutation response is lost before its operation ID arrives, the hold keeps
 the original tool, arguments and message correlation. A private owner lookup

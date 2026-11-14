@@ -49,6 +49,15 @@ class IncomingPage:
 
 
 @dataclass(frozen=True)
+class InboundObservationRefusal:
+    """Normalized metadata from the admitted transport, never an empty page."""
+
+    disposition: str
+    code: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SendResult:
     """Effect disposition and digest; a digest is never a provider message ID."""
     state: str
@@ -90,7 +99,7 @@ class BrokerPort(Protocol):
 
     async def inbound_list(
         self, *, after: PollCursor | None, limit: int
-    ) -> IncomingPage: ...
+    ) -> IncomingPage | InboundObservationRefusal: ...
 
     async def send_text(
         self, *, recipient: str, text: str, operation_id: str
@@ -205,6 +214,14 @@ class PollingRuntime:
         page = await asyncio.wait_for(
             self.broker.inbound_list(after=self.after, limit=50), min(self.timeout, 15)
         )
+        if isinstance(page, InboundObservationRefusal):
+            if (page.disposition, page.code, page.reason) != (
+                "failed_safe", "REQUEST_REFUSED", "inbound_window_truncated"
+            ):
+                raise ValueError("Unexpected observation refusal metadata")
+            # There is no proven oldest prefix. Do not create claims, deliver,
+            # or advance. A later read starts from this exact saved frontier.
+            raise HeldOutcome("Broker inbound history coverage is unproven")
         if not isinstance(page, IncomingPage) or not isinstance(page.messages, tuple) or len(page.messages) > 50:
             raise ValueError("Transport batch exceeds its limit")
         if type(page.complete) is not bool:
