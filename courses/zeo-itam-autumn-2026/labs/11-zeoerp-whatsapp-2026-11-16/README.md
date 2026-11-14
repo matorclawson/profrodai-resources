@@ -11,7 +11,7 @@ Run the offline checks from this folder:
 python3 -m unittest discover -s tests -v
 ```
 
-They use Python's standard library and synthetic customer references. The 30
+They use Python's standard library and synthetic customer references. The 36
 checks cover concurrent pollers, process restart, cursor advancement, changed
 customer bindings, turn cancellation, and uncertain outcomes. They also check
 exact draft versions, separate affirmative replies, closed tool arguments, and
@@ -54,3 +54,20 @@ license custody, and an authorized phone exchange. The current code is a
 mock-tested policy component, not a runnable WhatsApp agent. Preserve its
 private journal and display only masked customer information in class. Never
 put a provider credential in these files or pass it through a model tool.
+
+The poll cursor is persisted alongside attempt claims. Well-formed messages
+outside the configured scope, time window, or text-only exercise are recorded
+as `SKIPPED` and advance the cursor without reaching Mantle. Invalid transport
+shapes or inconsistent ordering still stop the page before any delivery.
+
+If a mutation response is lost before its operation ID arrives, the hold keeps
+the original tool, arguments and message correlation. A private owner lookup
+can identify that exact persisted operation; a subsequent `operation_status`
+read resolves it. This maintenance path is absent from model tools and never
+calls a mutation. Missing, mismatched or uncertain lookup results keep the
+hold. The actual owner lookup transport has not been implemented or admitted.
+Older holds without preserved metadata also stay held for an owner audit.
+
+Phone hashes are not anonymization or a security boundary; their small input
+space makes guessing possible. Keep the journal and any preserved arguments
+private even though they contain no provider credentials.

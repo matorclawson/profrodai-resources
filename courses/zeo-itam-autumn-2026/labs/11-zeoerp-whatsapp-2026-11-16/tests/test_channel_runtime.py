@@ -73,7 +73,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             delivered.append(message.message_sid)
             await self.runtime.reply("Synthetic shelf")
         self.page(self.message)
-        self.assertEqual(await self.runtime.poll_once(deliver), ["DONE"])
+        save_cursor = self.journal.save_cursor
+        def unavailable_cursor(*_args):
+            raise OSError("Synthetic stop after journal completion")
+        self.journal.save_cursor = unavailable_cursor
+        with self.assertRaises(OSError):
+            await self.runtime.poll_once(deliver)
+        self.journal.save_cursor = save_cursor
         self.runtime = self.new_runtime()
         self.page(replace(self.message, execution_id="execution-2"))
         self.assertEqual(await self.runtime.poll_once(deliver), ["DONE"])
@@ -92,32 +98,64 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.runtime.after, cursor)
         self.assertEqual(self.broker.polls, [(None, 50), (cursor, 50)])
 
-    async def test_whole_page_validation_blocks_foreign_sender_before_any_turn(self):
+    async def test_foreign_message_is_skipped_before_valid_turn_and_cursor_advances(self):
         delivered = []
         async def deliver(message):
             delivered.append(message)
-        self.page(self.message, replace(self.message, sender="whatsapp:+15550000003"))
-        with self.assertRaises(PermissionError):
-            await self.runtime.poll_once(deliver)
-        self.assertEqual(delivered, [])
-        self.assertIsNone(self.runtime.after)
+        foreign = replace(self.message, sender="whatsapp:+15550000003", message_sid="SM_foreign",
+                          sent_at=self.message.sent_at - timedelta(seconds=1))
+        self.page(foreign, self.message)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["SKIPPED", "DONE"])
+        self.assertEqual(delivered, [self.message])
+        self.assertEqual(self.runtime.after.sid, self.message.message_sid)
+        stored = self.journal.db.execute("SELECT result_ref FROM attempts WHERE operation=?",
+                                         ("inbound:SM_foreign",)).fetchone()[0]
+        self.assertEqual(stored, "SKIPPED:unlisted_sender")
 
-    async def test_rejects_wrong_grant_old_messages_media_and_bad_cursor(self):
+    async def test_wrong_grant_old_messages_and_media_skip_but_bad_cursor_refuses(self):
+        delivered = []
         async def deliver(_message):
-            self.fail("Invalid page reached the agent")
+            delivered.append(_message)
         cases = [
-            replace(self.message, connection_id="another-grant"),
-            replace(self.message, recipient="whatsapp:+15550000003"),
-            replace(self.message, sent_at=self.now - timedelta(hours=1)),
-            replace(self.message, num_media=1),
+            replace(self.message, message_sid="SM_old", sent_at=self.now - timedelta(hours=1)),
+            replace(self.message, message_sid="SM_grant", connection_id="another-grant", sent_at=self.now - timedelta(seconds=9)),
+            replace(self.message, message_sid="SM_recipient", recipient="whatsapp:+15550000003", sent_at=self.now - timedelta(seconds=8)),
+            replace(self.message, message_sid="SM_media", num_media=1, sent_at=self.now - timedelta(seconds=7)),
+            replace(self.message, sent_at=self.now - timedelta(seconds=1)),
         ]
-        for message in cases:
-            self.page(message)
-            with self.assertRaises((ValueError, PermissionError)):
-                await self.runtime.poll_once(deliver)
-        self.broker.pages.append(IncomingPage((self.message,), None))
+        self.page(*cases)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["SKIPPED"] * 4 + ["DONE"])
+        self.assertEqual(delivered, [cases[-1]])
+        self.broker.pages.append(IncomingPage((replace(self.message, sent_at=self.now),), None))
         with self.assertRaises(ValueError):
             await self.runtime.poll_once(deliver)
+
+    async def test_broken_transport_shape_refuses_entire_page_before_delivery(self):
+        async def deliver(_message):
+            self.fail("A malformed transport page reached the agent")
+        self.page(self.message, replace(self.message, text=123))
+        with self.assertRaises(ValueError):
+            await self.runtime.poll_once(deliver)
+        self.assertIsNone(self.runtime.after)
+
+    async def test_persisted_cursor_and_old_history_survive_restart_and_long_gap(self):
+        delivered = []
+        async def deliver(message):
+            delivered.append(message.message_sid)
+        self.page(self.message)
+        await self.runtime.poll_once(deliver)
+        saved = self.runtime.after
+        self.now += timedelta(days=2)
+        self.runtime = self.new_runtime()
+        self.assertEqual(self.runtime.after, saved)
+        old = replace(self.message, message_sid="SM_weekend", sent_at=self.message.sent_at + timedelta(seconds=1))
+        fresh = replace(self.message, message_sid="SM_monday", sent_at=self.now - timedelta(seconds=1))
+        self.page(old, fresh)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["SKIPPED", "DONE"])
+        self.assertEqual(self.broker.polls[-1][0], saved)
+        self.assertEqual(delivered, [self.message.message_sid, fresh.message_sid])
+        self.runtime = self.new_runtime()
+        self.assertEqual(self.runtime.after.sid, fresh.message_sid)
 
     async def test_unknown_send_holds_turn_and_does_not_resend_after_restart(self):
         self.broker.send_result = SendResult("ambiguous", "b" * 64)
@@ -180,7 +218,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.page(self.message)
         await self.runtime.poll_once(deliver)
         self.runtime = self.new_runtime()
-        self.page(replace(self.message, text="different order"))
+        self.page(replace(self.message, text="different order", sent_at=self.message.sent_at + timedelta(seconds=1)))
         with self.assertRaises(BindingConflict):
             await self.runtime.poll_once(deliver)
 

@@ -26,7 +26,7 @@ class StaleAttempt(ValueError):
 
 @dataclass(frozen=True)
 class Claim:
-    state: Literal["START", "HELD", "DONE"]
+    state: Literal["START", "HELD", "DONE", "SKIPPED"]
     ticket: str | None = None
     result_ref: str | None = None
 
@@ -70,6 +70,10 @@ class ChannelJournal:
             "phase TEXT NOT NULL CHECK (phase IN ('IN_FLIGHT','UNKNOWN','DONE')), "
             "ticket TEXT NOT NULL, result_ref TEXT, PRIMARY KEY (scope, operation))"
         )
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS poll_cursors (scope TEXT NOT NULL, stream TEXT NOT NULL, "
+            "date_sent TEXT NOT NULL, sid TEXT NOT NULL, PRIMARY KEY(scope, stream))"
+        )
 
     def close(self) -> None:
         self.db.close()
@@ -97,7 +101,11 @@ class ChannelJournal:
             if row is not None:
                 if row[0] != digest:
                     raise BindingConflict("operation reused with a different binding")
-                result = Claim("DONE", result_ref=row[2]) if row[1] == "DONE" else Claim("HELD")
+                if row[1] == "DONE":
+                    state = "SKIPPED" if row[2].startswith("SKIPPED:") else "DONE"
+                    result = Claim(state, result_ref=row[2])
+                else:
+                    result = Claim("HELD")
             else:
                 ticket = secrets.token_hex(24)
                 self.db.execute(
@@ -114,6 +122,27 @@ class ChannelJournal:
     def uncertain(self, scope: str, operation: str, ticket: str) -> None:
         """Hold an unknown outcome. This never resets the attempt for retry."""
         self._change(scope, operation, ticket, "UNKNOWN", None, ("IN_FLIGHT",))
+
+    def skip(self, scope: str, operation: str, ticket: str, reason: str) -> None:
+        if reason not in {"wrong_binding", "unlisted_sender", "media", "empty_text", "outside_window"}:
+            raise ValueError("Unknown skip reason")
+        self.complete(scope, operation, ticket, "SKIPPED:" + reason)
+
+    def cursor(self, scope: str, stream: str) -> tuple[str, str] | None:
+        return self.db.execute(
+            "SELECT date_sent, sid FROM poll_cursors WHERE scope=? AND stream=?", (scope, stream)
+        ).fetchone()
+
+    def save_cursor(self, scope: str, stream: str, date_sent: str, sid: str) -> None:
+        # The caller normalizes date_sent to fixed-width UTC. Never regress a
+        # saved watermark if another poller has already advanced it.
+        self.db.execute(
+            "INSERT INTO poll_cursors VALUES (?, ?, ?, ?) ON CONFLICT(scope,stream) DO UPDATE "
+            "SET date_sent=excluded.date_sent,sid=excluded.sid WHERE "
+            "excluded.date_sent>poll_cursors.date_sent OR "
+            "(excluded.date_sent=poll_cursors.date_sent AND excluded.sid>poll_cursors.sid)",
+            (scope, stream, date_sent, sid),
+        )
 
     def held(self, scope: str, *, limit: int = 100) -> list[HeldAttempt]:
         """Recover original handles for trusted result lookup after a restart.

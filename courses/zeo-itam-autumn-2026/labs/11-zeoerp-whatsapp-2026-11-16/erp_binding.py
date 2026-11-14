@@ -15,6 +15,7 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Protocol
+from dataclasses import dataclass
 
 from channel_journal import ChannelJournal
 from channel_runtime import HeldOutcome, current_binding
@@ -29,6 +30,25 @@ class ERPPort(Protocol):
     """A paired transport that validates full MCP input/output schemas."""
 
     async def call(self, tool: str, arguments: dict, *, context_header: str) -> dict: ...
+
+
+@dataclass(frozen=True)
+class OriginalOperation:
+    message_sid: str
+    tool: str
+    arguments: dict
+    operation_id: str
+
+
+class OriginalLookupPort(Protocol):
+    """Transport-owner lookup in the already admitted company namespace.
+
+    This is a private maintenance port, not a tenth model tool or an installed
+    endpoint. It must authoritatively identify a persisted original operation;
+    candidate matching or a caller's assertion is insufficient. No dispatch.
+    """
+
+    async def lookup_original(self, *, message_sid: str, tool: str, arguments: dict) -> OriginalOperation | None: ...
 
 
 def canonical(value) -> str:
@@ -117,15 +137,90 @@ def business_envelope(tool: str, response: dict) -> dict:
 
 class ERPBinding:
     def __init__(self, port: ERPPort, journal: ChannelJournal, *, scope: str,
-                 clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)):
+                 clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+                 original_lookup: OriginalLookupPort | None = None):
         if not scope:
             raise ValueError("An admitted company/grant scope is required")
         self.port, self.journal, self.scope, self.clock = port, journal, scope, clock
+        self.original_lookup = original_lookup
         self.journal.db.execute(
             "CREATE TABLE IF NOT EXISTS reviews (customer TEXT PRIMARY KEY, snapshot TEXT NOT NULL, source_sid TEXT NOT NULL)"
         )
         self.journal.db.execute(
             "CREATE TABLE IF NOT EXISTS mutation_holds (customer TEXT PRIMARY KEY, operation TEXT NOT NULL, operation_id TEXT)"
+        )
+        if "original" not in {row[1] for row in self.journal.db.execute("PRAGMA table_info(mutation_holds)")}:
+            self.journal.db.execute("ALTER TABLE mutation_holds ADD COLUMN original TEXT")
+        if "scope" not in {row[1] for row in self.journal.db.execute("PRAGMA table_info(mutation_holds)")}:
+            self.journal.db.execute("ALTER TABLE mutation_holds ADD COLUMN scope TEXT")
+
+    async def owner_reconcile(self, message_sid: str) -> dict:
+        """Resolve a hold through authoritative owner lookup and a status read.
+
+        Never call a mutation here, replace its SID, or infer that an absent
+        lookup result means no effect. The launcher must admit the lookup port;
+        this function is deliberately absent from all model tool adapters.
+        """
+        operation = "erp-mutation:" + message_sid
+        row = self.journal.db.execute(
+            "SELECT customer,original FROM mutation_holds WHERE operation=? AND scope=?", (operation, self.scope)
+        ).fetchone()
+        if row is None or row[1] is None or self.original_lookup is None:
+            raise HeldOutcome("Original metadata or admitted owner lookup is unavailable")
+        customer, encoded = row
+        original = json.loads(encoded)
+        expected_arguments = canonical(original["arguments"])
+        found = await asyncio.wait_for(self.original_lookup.lookup_original(
+            message_sid=message_sid, tool=original["tool"], arguments=json.loads(expected_arguments)
+        ), 20)
+        if not isinstance(found, OriginalOperation) or (
+            found.message_sid != message_sid or found.tool != original["tool"]
+            or canonical(found.arguments) != expected_arguments
+            or not re.fullmatch(r"op_[0-9a-f]{24}", found.operation_id)
+        ):
+            raise HeldOutcome("Lookup did not establish the exact original operation")
+        self.journal.db.execute(
+            "UPDATE mutation_holds SET operation_id=? WHERE customer=? AND operation=?",
+            (found.operation_id, customer, operation),
+        )
+        context = {**original["context"], "tool": "operation_status", "operation_discriminator": "read",
+                   "issued_at": self.clock().isoformat(),
+                   "deadline": (self.clock() + timedelta(seconds=20)).isoformat()}
+        context.pop("confirmation", None)
+        header = base64.urlsafe_b64encode(canonical(context).encode()).decode().rstrip("=")
+        result = business_envelope("operation_status", await asyncio.wait_for(self.port.call(
+            "operation_status", {"operation_id": found.operation_id}, context_header=header
+        ), 20))
+        if result["state"] != "completed":
+            return result
+        observed = result["data"]
+        if observed["target_operation_id"] != found.operation_id or observed["tool_name"] != found.tool:
+            raise HeldOutcome("Status read did not match the original operation")
+        if observed["phase"] in {"completed", "refused"}:
+            if observed["phase"] == "completed":
+                business_envelope(found.tool, {"success": True, "data": {
+                    "ok": True, "state": "completed", "operation_id": found.operation_id,
+                    "data": observed["result"],
+                }})
+                if found.tool == "create_draft_order":
+                    self.journal.db.execute(
+                        "INSERT OR REPLACE INTO reviews VALUES (?, ?, ?)",
+                        (customer, canonical(observed["result"]), message_sid),
+                    )
+            self._finish_original(customer, operation, found.operation_id, observed["phase"])
+        return result
+
+    def _finish_original(self, customer: str, operation: str, operation_id: str, phase: str) -> None:
+        claim = self.journal.db.execute(
+            "SELECT ticket,phase FROM attempts WHERE scope=? AND operation=?", (self.scope, operation)
+        ).fetchone()
+        if claim is None:
+            raise HeldOutcome("Original journal claim is unavailable")
+        if claim[1] != "DONE":
+            reference = operation_id if phase == "completed" else "refused:" + operation_id
+            self.journal.complete(self.scope, operation, claim[0], reference)
+        self.journal.db.execute(
+            "DELETE FROM mutation_holds WHERE customer=? AND operation=?", (customer, operation)
         )
 
     def _customer(self, turn) -> str:
@@ -173,7 +268,8 @@ class ERPBinding:
             # Reserve the customer first. A crash before the message claim
             # leaves a conservative hold; no later message can bypass it.
             self.journal.db.execute(
-                "INSERT INTO mutation_holds VALUES (?, ?, NULL)", (self._customer(turn), operation)
+                "INSERT INTO mutation_holds(customer,operation,operation_id,original,scope) VALUES (?, ?, NULL, ?, ?)",
+                (self._customer(turn), operation, canonical({"tool": tool, "arguments": arguments, "context": context}), self.scope),
             )
             try:
                 attempt = self.journal.claim(self.scope, operation, binding={
@@ -197,19 +293,30 @@ class ERPBinding:
             response = await asyncio.wait_for(
                 self.port.call(tool, arguments, context_header=header), timeout
             )
-            current_binding(self.clock())
             envelope = business_envelope(tool, response)
             if tool == "operation_status" and envelope["state"] == "completed":
                 if envelope["data"]["target_operation_id"] != arguments["operation_id"]:
                     raise HeldOutcome("Lookup returned a different operation")
                 if envelope["data"]["phase"] in {"completed", "refused"}:
-                    self.journal.db.execute(
-                        "DELETE FROM mutation_holds WHERE customer=? AND operation_id=?",
+                    held = self.journal.db.execute(
+                        "SELECT operation,original FROM mutation_holds WHERE customer=? AND operation_id=?",
                         (self._customer(turn), arguments["operation_id"]),
-                    )
+                    ).fetchone()
+                    if held:
+                        original = json.loads(held[1]) if held[1] else None
+                        observed = envelope["data"]
+                        if original is None or observed["tool_name"] != original["tool"]:
+                            raise HeldOutcome("Status read did not match the held original tool")
+                        if observed["phase"] == "completed":
+                            business_envelope(original["tool"], {"success": True, "data": {
+                                "ok": True, "state": "completed", "operation_id": arguments["operation_id"],
+                                "data": observed["result"],
+                            }})
+                        self._finish_original(self._customer(turn), held[0], arguments["operation_id"], envelope["data"]["phase"])
             if attempt is not None:
-                if envelope["state"] == "completed":
-                    self.journal.complete(self.scope, operation, attempt.ticket, envelope["operation_id"])
+                if envelope["state"] in {"completed", "refused"}:
+                    reference = envelope.get("operation_id") if envelope["state"] == "completed" else "refused:" + tool
+                    self.journal.complete(self.scope, operation, attempt.ticket, reference)
                 else:
                     self.journal.uncertain(self.scope, operation, attempt.ticket)
                 if envelope["state"] in {"completed", "refused"}:
@@ -231,6 +338,10 @@ class ERPBinding:
                         "INSERT OR REPLACE INTO reviews VALUES (?, ?, ?)",
                         (self._customer(turn), canonical(order), turn.message.message_sid),
                     )
+            # Record a received authoritative outcome before fencing a turn
+            # that expired while awaiting ERP. Never turn known completion
+            # into UNKNOWN merely because its customer response is now late.
+            current_binding(self.clock())
             return envelope
         except BaseException:
             if attempt is not None:

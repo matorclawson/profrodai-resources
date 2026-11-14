@@ -148,30 +148,50 @@ class PollingRuntime:
             raise ValueError("An explicit participant allowlist is required")
         self.allowed_senders = frozenset(allowed_senders)
         self.clock, self.timeout = clock, timeout
-        self.after: PollCursor | None = None
+        self._stream = hashlib.sha256(f"{connection_id}:{sandbox_recipient}".encode()).hexdigest()
+        saved = journal.cursor(scope, self._stream)
+        self.after = PollCursor(datetime.fromisoformat(saved[0]), saved[1]) if saved else None
         self._poll_lock = asyncio.Lock()
 
     def _validate(self, message: IncomingMessage) -> None:
         if not isinstance(message, IncomingMessage):
             raise ValueError("Transport did not return a typed message")
-        if message.connection_id != self.connection_id or message.recipient != self.recipient:
-            raise PermissionError("Message is outside the granted sandbox binding")
+        if not isinstance(message.connection_id, str) or not message.connection_id:
+            raise ValueError("Invalid connection ID")
+        if not isinstance(message.recipient, str) or not re.fullmatch(r"whatsapp:\+[1-9][0-9]{7,14}", message.recipient):
+            raise ValueError("Invalid recipient")
         if not re.fullmatch(r"whatsapp:\+[1-9][0-9]{7,14}", message.sender):
             raise ValueError("Invalid verified sender")
-        if message.sender not in self.allowed_senders:
-            raise PermissionError("Sender is outside the admitted participants")
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", message.message_sid):
             raise ValueError("Invalid provider message ID")
         if not message.execution_id or len(message.execution_id) > 128:
             raise ValueError("Missing bounded retrieval execution ID")
-        if not isinstance(message.text, str) or not 0 < len(message.text) <= 4096:
+        if not isinstance(message.text, str) or len(message.text) > 4096:
             raise ValueError("Only bounded text messages are accepted")
-        if type(message.num_media) is not int or message.num_media != 0:
-            raise ValueError("Media messages are not supported")
+        if type(message.num_media) is not int or message.num_media < 0:
+            raise ValueError("Invalid media count")
         if message.sent_at.tzinfo is None:
             raise ValueError("Message time must be timezone-aware")
+
+    def _skip_reason(self, message: IncomingMessage) -> str | None:
+        if message.connection_id != self.connection_id or message.recipient != self.recipient:
+            return "wrong_binding"
+        if message.sender not in self.allowed_senders:
+            return "unlisted_sender"
+        if message.num_media:
+            return "media"
+        if not message.text:
+            return "empty_text"
         if message.sent_at < max(self.not_before, self.clock() - timedelta(minutes=15)) or message.sent_at > self.clock():
-            raise PermissionError("Message is outside the admitted polling window")
+            return "outside_window"
+        return None
+
+    def _advance(self, message: IncomingMessage) -> None:
+        self.journal.save_cursor(self.scope, self._stream,
+                                 message.sent_at.astimezone(timezone.utc).isoformat(timespec="microseconds"),
+                                 message.message_sid)
+        saved = self.journal.cursor(self.scope, self._stream)
+        self.after = PollCursor(datetime.fromisoformat(saved[0]), saved[1])
 
     async def poll_once(self, deliver: Callable[[IncomingMessage], Awaitable[None]]) -> list[str]:
         async with self._poll_lock:
@@ -203,11 +223,19 @@ class PollingRuntime:
                 "message_sid": message.message_sid,
                 "text": message.text,
                 "sent_at": message.sent_at.isoformat(),
+                "num_media": str(message.num_media),
             }
             operation = "inbound:" + message.message_sid
             attempt = self.journal.claim(self.scope, operation, binding=binding)
             if attempt.state != "START":
                 results.append(attempt.state)
+                self._advance(message)
+                continue
+            reason = self._skip_reason(message)
+            if reason:
+                self.journal.skip(self.scope, operation, attempt.ticket, reason)
+                results.append("SKIPPED")
+                self._advance(message)
                 continue
             turn = TurnBinding(message, self.clock() + timedelta(seconds=self.timeout))
             token = _current.set(turn)
@@ -223,7 +251,7 @@ class PollingRuntime:
             finally:
                 turn.active = False
                 _current.reset(token)
-        self.after = page.next_after
+            self._advance(message)
         return results
 
     async def reply(self, text: str) -> str:

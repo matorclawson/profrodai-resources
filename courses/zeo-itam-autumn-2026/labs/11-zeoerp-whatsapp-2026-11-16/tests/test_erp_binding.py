@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from channel_journal import BindingConflict, ChannelJournal
 from channel_runtime import HeldOutcome, IncomingMessage, IncomingPage, PollCursor, PollingRuntime
-from erp_binding import ERPBinding, arguments_for, business_envelope
+from erp_binding import ERPBinding, OriginalOperation, arguments_for, business_envelope
 
 ORDER_ID = "ord_" + "1" * 24
 OP_ID = "op_" + "2" * 24
@@ -46,6 +46,16 @@ class FakeERP:
 class FakeInbound:
     async def inbound_list(self, **_kwargs):
         return self.page
+
+
+class FakeOriginalLookup:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    async def lookup_original(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
 
 
 class BindingTests(unittest.IsolatedAsyncioTestCase):
@@ -192,6 +202,74 @@ class BindingTests(unittest.IsolatedAsyncioTestCase):
         self.erp.response = None
         await self.turn(self.draft)
         self.assertEqual(self.erp.calls[-1][0], "create_draft_order")
+
+    async def test_owner_lookup_recovers_lost_id_then_status_and_separate_confirmation(self):
+        self.erp.response = TimeoutError("Synthetic response lost after ERP accepted it")
+        with self.assertRaises(TimeoutError):
+            await self.turn(self.draft)
+        sid = self.message.message_sid
+        original_tool, original_args, _context = self.erp.calls[0]
+        lookup = FakeOriginalLookup(OriginalOperation(sid, original_tool, original_args, OP_ID))
+        # Recreate the binding to exercise persisted metadata after restart.
+        self.binding = ERPBinding(self.erp, self.journal, scope="demo", clock=lambda: self.now,
+                                  original_lookup=lookup)
+        self.erp.response = {"success": True, "data": {"ok": True, "state": "completed", "data": {
+            "target_operation_id": OP_ID, "tool_name": "create_draft_order", "phase": "pending",
+            "result": None, "next_action": "poll_operation_status",
+        }}}
+        result = await self.binding.owner_reconcile(sid)
+        self.assertEqual(result["data"]["phase"], "pending")
+        with self.assertRaises(HeldOutcome):
+            await self.turn(self.draft)
+        self.erp.response["data"]["data"].update(phase="completed", result=copy.deepcopy(self.order), next_action="none")
+        await self.binding.owner_reconcile(sid)
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM mutation_holds").fetchone()[0], 0)
+        state = self.journal.db.execute("SELECT phase,result_ref FROM attempts WHERE operation=?",
+                                        ("erp-mutation:" + sid,)).fetchone()
+        self.assertEqual(state, ("DONE", OP_ID))
+        self.assertEqual([call[0] for call in self.erp.calls],
+                         ["create_draft_order", "operation_status", "operation_status"])
+        self.assertTrue(all(call[2]["message_sid"] == sid for call in self.erp.calls))
+        self.erp.response = None
+        await self.turn(self.confirm, text="yes")
+        self.assertEqual(self.erp.calls[-1][0], "confirm_order")
+
+    async def test_owner_lookup_must_establish_exact_original_and_never_dispatches(self):
+        self.erp.response = TimeoutError("Synthetic lost response")
+        with self.assertRaises(TimeoutError):
+            await self.turn(self.draft)
+        sid = self.message.message_sid
+        tool, args, _context = self.erp.calls[0]
+        for result in [None, OriginalOperation(sid, tool, {"lines": []}, OP_ID),
+                       OriginalOperation("another-sid", tool, args, OP_ID)]:
+            self.binding.original_lookup = FakeOriginalLookup(result)
+            with self.assertRaises(HeldOutcome):
+                await self.binding.owner_reconcile(sid)
+        self.assertEqual(len(self.erp.calls), 1)
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM mutation_holds").fetchone()[0], 1)
+
+    async def test_late_completed_response_is_recorded_before_turn_expiry_refusal(self):
+        original_call = self.erp.call
+        async def late_call(*args, **kwargs):
+            result = await original_call(*args, **kwargs)
+            self.now += timedelta(seconds=30)
+            return result
+        self.erp.call = late_call
+        with self.assertRaises(PermissionError):
+            await self.turn(self.draft)
+        state = self.journal.db.execute("SELECT phase,result_ref FROM attempts WHERE operation=?",
+                                        ("erp-mutation:" + self.message.message_sid,)).fetchone()
+        self.assertEqual(state, ("DONE", OP_ID))
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM mutation_holds").fetchone()[0], 0)
+
+    async def test_definitive_refusal_finishes_claim_instead_of_becoming_unknown(self):
+        self.erp.response = {"success": True, "data": {"ok": False, "state": "refused",
+                             "error": {"code": "INSUFFICIENT_STOCK", "message": "Unavailable"}}}
+        await self.turn(self.draft)
+        self.assertEqual(self.journal.held("demo"), [])
+        state = self.journal.db.execute("SELECT phase,result_ref FROM attempts WHERE operation=?",
+                                        ("erp-mutation:" + self.message.message_sid,)).fetchone()
+        self.assertEqual(state, ("DONE", "refused:create_draft_order"))
 
     def test_bad_adapter_success_projection_and_foreign_identity_fail_closed(self):
         cases = [
