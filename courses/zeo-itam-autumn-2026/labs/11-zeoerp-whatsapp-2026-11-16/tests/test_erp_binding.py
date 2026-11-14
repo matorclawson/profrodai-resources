@@ -1,0 +1,216 @@
+"""Policy tests with a fake already-schema-validated ERP transport.
+
+These do not qualify the producer JSON Schemas, MCP wire, or provider identity.
+"""
+
+import base64
+import copy
+import json
+import sys
+import tempfile
+import unittest
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from channel_journal import BindingConflict, ChannelJournal
+from channel_runtime import HeldOutcome, IncomingMessage, IncomingPage, PollCursor, PollingRuntime
+from erp_binding import ERPBinding, arguments_for, business_envelope
+
+ORDER_ID = "ord_" + "1" * 24
+OP_ID = "op_" + "2" * 24
+
+
+class FakeERP:
+    def __init__(self, order):
+        self.order = order
+        self.calls = []
+        self.response = None
+
+    async def call(self, tool, arguments, *, context_header):
+        context = json.loads(base64.urlsafe_b64decode(context_header + "=" * (-len(context_header) % 4)))
+        self.calls.append((tool, arguments, context))
+        if isinstance(self.response, BaseException):
+            raise self.response
+        if self.response is not None:
+            return copy.deepcopy(self.response)
+        order = copy.deepcopy(self.order)
+        if tool == "confirm_order":
+            order["state"] = "confirmed"
+        return {"success": True, "data": {
+            "ok": True, "state": "completed", "operation_id": OP_ID, "data": order,
+        }}
+
+
+class FakeInbound:
+    async def inbound_list(self, **_kwargs):
+        return self.page
+
+
+class BindingTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.journal = ChannelJournal(Path(self.tmp.name) / "channel.sqlite3")
+        self.now = datetime(2026, 11, 14, 12, tzinfo=timezone.utc)
+        self.message = IncomingMessage("demo", "whatsapp:+15550000001", "whatsapp:+15550000002",
+                                       "SM_synthetic_1", "execution-1", "two teas", self.now - timedelta(seconds=1))
+        self.inbound = FakeInbound()
+        self.runtime = PollingRuntime(
+            self.inbound, self.journal, scope="demo", connection_id="demo",
+            sandbox_recipient=self.message.recipient,
+            allowed_senders=frozenset([self.message.sender, "whatsapp:+15550000003"]),
+            not_before=self.now - timedelta(minutes=10), clock=lambda: self.now,
+        )
+        self.order = {
+            "order_id": ORDER_ID, "version": 1, "state": "draft",
+            "quote": {"expires_at": (self.now + timedelta(minutes=5)).isoformat()},
+            "prompt": {"event_id": "prompt-1", "send_receipt": "opaque-original-receipt", "delivery_state": "confirmed"},
+            "projection": {"state": "confirmed"},
+        }
+        self.erp = FakeERP(self.order)
+        self.binding = ERPBinding(self.erp, self.journal, scope="demo", clock=lambda: self.now)
+
+    def tearDown(self):
+        self.journal.close()
+        self.tmp.cleanup()
+
+    async def turn(self, callback, **changes):
+        self.now += timedelta(seconds=1)
+        self.message = replace(self.message, message_sid="SM_" + str(self.now.timestamp()).replace(".", "_"),
+                               sent_at=self.now - timedelta(microseconds=1), **changes)
+        self.inbound.page = IncomingPage((self.message,), PollCursor(self.message.sent_at, self.message.message_sid))
+        async def deliver(_message):
+            await callback()
+        return await self.runtime.poll_once(deliver)
+
+    async def draft(self):
+        await self.binding.call("create_draft_order", {"lines": [{"product_id": "tea", "quantity": 2}]})
+
+    async def confirm(self):
+        return await self.binding.call("confirm_order", {"order_id": ORDER_ID, "draft_version": 1})
+
+    async def test_separate_yes_uses_bound_sid_and_no_claimed_sender_or_reply(self):
+        await self.turn(self.draft)
+        await self.turn(self.confirm, text=" YES ")
+        tool, args, context = self.erp.calls[-1]
+        self.assertEqual(tool, "confirm_order")
+        self.assertEqual(context["message_sid"], self.message.message_sid)
+        self.assertEqual(context["confirmation"]["prompt_send_receipt"], "opaque-original-receipt")
+        self.assertNotIn("sender", context)
+        self.assertNotIn("explicit_reply", context["confirmation"])
+        self.assertEqual(args, {"order_id": ORDER_ID, "draft_version": 1})
+
+    async def test_draft_and_confirm_in_one_message_cannot_dispatch_two_mutations(self):
+        async def two_calls():
+            await self.draft()
+            await self.confirm()
+        with self.assertRaises(PermissionError):
+            await self.turn(two_calls, text="yes")
+        self.assertEqual(len(self.erp.calls), 1)
+
+    async def test_second_different_mutation_conflicts_even_with_different_tool(self):
+        async def two_calls():
+            await self.draft()
+            await self.binding.call("request_human_handoff", {})
+        with self.assertRaises(BindingConflict):
+            await self.turn(two_calls)
+        self.assertEqual(len(self.erp.calls), 1)
+
+    async def test_model_cannot_inject_identity_or_confirmation(self):
+        for extra in ["sender", "message_sid", "company", "context", "confirmation"]:
+            async def call():
+                await self.binding.call("create_draft_order", {"lines": [{"product_id": "tea", "quantity": 1}], extra: "forged"})
+            with self.assertRaises(ValueError):
+                await self.turn(call)
+        self.assertEqual(self.erp.calls, [])
+
+    async def test_nonaffirmative_foreign_customer_and_stale_version_do_not_confirm(self):
+        await self.turn(self.draft)
+        with self.assertRaises(PermissionError):
+            await self.turn(self.confirm, text="yes, but make it three")
+        with self.assertRaises(PermissionError):
+            await self.turn(self.confirm, text="yes", sender="whatsapp:+15550000003")
+        async def stale():
+            await self.binding.call("confirm_order", {"order_id": ORDER_ID, "draft_version": 2})
+        with self.assertRaises(PermissionError):
+            await self.turn(stale, sender="whatsapp:+15550000002", text="yes")
+        self.assertEqual(len(self.erp.calls), 1)
+
+    async def test_expired_and_uncertain_prompt_are_not_armed(self):
+        for field, value in [("delivery_state", "unknown"), ("send_receipt", None)]:
+            self.erp.order["prompt"][field] = value
+            await self.turn(self.draft, text="two teas")
+            with self.assertRaises(PermissionError):
+                await self.turn(self.confirm, text="yes")
+            self.erp.order = copy.deepcopy(self.order)
+        self.erp.order["quote"]["expires_at"] = (self.now - timedelta(seconds=1)).isoformat()
+        await self.turn(self.draft, text="two teas")
+        with self.assertRaises(PermissionError):
+            await self.turn(self.confirm, text="yes")
+
+    async def test_lost_response_holds_original_and_never_reissues_mutation(self):
+        self.erp.response = TimeoutError("synthetic timeout")
+        with self.assertRaises(TimeoutError):
+            await self.turn(self.draft)
+        self.assertEqual(len(self.erp.calls), 1)
+        held = self.journal.held("demo")
+        self.assertTrue(any(item.operation.startswith("erp-mutation:") for item in held))
+        # Reopening the poller sees the original held SID, not a fresh attempt.
+        self.runtime.after = None
+        await self.runtime.poll_once(lambda _message: self.draft())
+        self.assertEqual(len(self.erp.calls), 1)
+        with self.assertRaises(HeldOutcome):
+            await self.turn(self.draft, text="try a new order")
+        self.assertEqual(len(self.erp.calls), 1)
+
+    async def test_pending_is_not_completion_and_only_original_lookup_is_read(self):
+        self.erp.response = {"success": True, "data": {
+            "ok": False, "state": "pending", "operation_id": OP_ID,
+            "error": {"code": "PENDING_SYNC", "message": "Pending"}, "next_action": "poll_operation_status",
+        }}
+        results = []
+        async def draft():
+            results.append(await self.binding.call("create_draft_order", {"lines": [{"product_id": "tea", "quantity": 1}]}))
+        await self.turn(draft)
+        self.assertFalse(results[-1]["ok"])
+        self.erp.response = {"success": True, "data": {"ok": True, "state": "completed", "data": {
+            "target_operation_id": OP_ID, "tool_name": "create_draft_order", "phase": "unknown",
+            "result": None, "next_action": "owner_reconciliation",
+        }}}
+        async def lookup():
+            results.append(await self.binding.call("operation_status", {"operation_id": OP_ID}))
+        await self.turn(lookup)
+        self.assertEqual(results[-1]["data"]["phase"], "unknown")
+        self.assertEqual([call[0] for call in self.erp.calls], ["create_draft_order", "operation_status"])
+        with self.assertRaises(HeldOutcome):
+            await self.turn(self.draft)
+        self.erp.response["data"]["data"]["phase"] = "completed"
+        self.erp.response["data"]["data"]["result"] = copy.deepcopy(self.order)
+        self.erp.response["data"]["data"]["next_action"] = "none"
+        await self.turn(lookup)
+        self.erp.response = None
+        await self.turn(self.draft)
+        self.assertEqual(self.erp.calls[-1][0], "create_draft_order")
+
+    def test_bad_adapter_success_projection_and_foreign_identity_fail_closed(self):
+        cases = [
+            ("confirm_order", {"success": True}),
+            ("confirm_order", {"success": True, "data": {"ok": True, "state": "pending"}}),
+            ("confirm_order", {"success": True, "data": {"ok": True, "state": "completed", "operation_id": OP_ID, "data": self.order}}),
+            ("order_status", {"success": True, "data": {"ok": False, "state": "refused", "error": {"code": "NOT_FOUND", "message": "Missing", "current_version": 7}}}),
+        ]
+        for tool, response in cases:
+            with self.assertRaises(HeldOutcome):
+                business_envelope(tool, response)
+
+    def test_closed_arguments_refuse_boolean_quantity_and_bad_ids(self):
+        for quantity in [True, 0, 1001]:
+            with self.assertRaises(ValueError):
+                arguments_for("check_stock", {"lines": [{"product_id": "tea", "quantity": quantity}]})
+        with self.assertRaises(ValueError):
+            arguments_for("confirm_order", {"order_id": "another-order", "draft_version": 1})
+
+
+if __name__ == "__main__":
+    unittest.main()
