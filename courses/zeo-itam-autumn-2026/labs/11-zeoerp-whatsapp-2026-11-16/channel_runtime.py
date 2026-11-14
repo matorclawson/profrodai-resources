@@ -210,8 +210,11 @@ class PollingRuntime:
         cursors = [PollCursor(item.sent_at, item.message_sid) for item in batch]
         if cursors != sorted(cursors):
             raise ValueError("Transport page is not ordered")
-        if self.after is not None and any(item <= self.after for item in cursors):
-            raise ValueError("Transport cursor did not advance")
+        # Accept either an exclusive page or an inclusive boundary replay.
+        # The persisted SID claim handles equality without another delivery;
+        # observations older than the requested cursor remain a wire error.
+        if self.after is not None and any(item < self.after for item in cursors):
+            raise ValueError("Transport returned messages before its cursor")
         if page.next_after != (cursors[-1] if cursors else self.after):
             raise ValueError("Transport returned an inconsistent next cursor")
         results = []

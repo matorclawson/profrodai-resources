@@ -98,6 +98,22 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.runtime.after, cursor)
         self.assertEqual(self.broker.polls, [(None, 50), (cursor, 50)])
 
+    async def test_restart_tolerates_inclusive_boundary_without_repeated_delivery(self):
+        delivered = []
+        async def deliver(message):
+            delivered.append(message.message_sid)
+        self.page(self.message)
+        await self.runtime.poll_once(deliver)
+        self.runtime = self.new_runtime()
+        boundary = replace(self.message, execution_id="new-retrieval")
+        self.page(boundary)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["DONE"])
+        fresh = replace(self.message, message_sid="SM_fresh", sent_at=self.now - timedelta(seconds=1))
+        self.page(boundary, fresh)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["DONE", "DONE"])
+        self.assertEqual(delivered, [self.message.message_sid, fresh.message_sid])
+        self.assertEqual(self.runtime.after.sid, fresh.message_sid)
+
     async def test_foreign_message_is_skipped_before_valid_turn_and_cursor_advances(self):
         delivered = []
         async def deliver(message):
