@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from channel_journal import BindingConflict, ChannelJournal
 from channel_runtime import HeldOutcome, IncomingMessage, IncomingPage, PollCursor, PollingRuntime
-from erp_binding import ERPBinding, OriginalOperation, arguments_for, business_envelope
+from erp_binding import ERPBinding, OriginalOperation, arguments_for, business_envelope, domain_payload
 
 ORDER_ID = "ord_" + "1" * 24
 OP_ID = "op_" + "2" * 24
@@ -241,12 +241,84 @@ class BindingTests(unittest.IsolatedAsyncioTestCase):
         sid = self.message.message_sid
         tool, args, _context = self.erp.calls[0]
         for result in [None, OriginalOperation(sid, tool, {"lines": []}, OP_ID),
+                       OriginalOperation(sid, tool, {"lines": [{"product_id": "tea", "quantity": 3}]}, OP_ID),
                        OriginalOperation("another-sid", tool, args, OP_ID)]:
             self.binding.original_lookup = FakeOriginalLookup(result)
             with self.assertRaises(HeldOutcome):
                 await self.binding.owner_reconcile(sid)
         self.assertEqual(len(self.erp.calls), 1)
         self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM mutation_holds").fetchone()[0], 1)
+
+    async def test_normal_status_after_pending_owner_lookup_restores_original_draft_review(self):
+        self.erp.response = TimeoutError("Synthetic lost draft response")
+        with self.assertRaises(TimeoutError):
+            await self.turn(self.draft)
+        sid = self.message.message_sid
+        tool, args, _context = self.erp.calls[0]
+        self.binding.original_lookup = FakeOriginalLookup(OriginalOperation(sid, tool, args, OP_ID))
+        observed = {"target_operation_id": OP_ID, "tool_name": tool, "phase": "pending",
+                    "result": None, "next_action": "poll_operation_status"}
+        self.erp.response = {"success": True, "data": {"ok": True, "state": "completed", "data": observed}}
+        await self.binding.owner_reconcile(sid)
+        observed.update(phase="completed", result=copy.deepcopy(self.order), next_action="none")
+        async def status():
+            await self.binding.call("operation_status", {"operation_id": OP_ID})
+        await self.turn(status, text="check the original order")
+        status_sid = self.message.message_sid
+        snapshot, source_sid = self.journal.db.execute("SELECT snapshot,source_sid FROM reviews").fetchone()
+        self.assertEqual(source_sid, sid)
+        self.assertNotEqual(source_sid, status_sid)
+        self.assertEqual(json.loads(snapshot)["prompt"], self.order["prompt"])
+        self.assertEqual(json.loads(snapshot)["version"], 1)
+        self.erp.response = None
+        await self.turn(self.confirm, text="yes")
+        self.assertEqual(self.erp.calls[-1][0], "confirm_order")
+        self.assertEqual([call[0] for call in self.erp.calls],
+                         ["create_draft_order", "operation_status", "operation_status", "confirm_order"])
+
+    async def test_unsorted_original_lines_match_normalized_owner_arguments(self):
+        wire = {"lines": [{"product_id": "tea", "quantity": 2}, {"product_id": "mug", "quantity": 1}]}
+        normalized = {"lines": [{"product_id": "mug", "quantity": 1}, {"product_id": "tea", "quantity": 2}]}
+        self.erp.response = TimeoutError("Synthetic lost response")
+        async def draft():
+            await self.binding.call("create_draft_order", wire)
+        with self.assertRaises(TimeoutError):
+            await self.turn(draft)
+        sid = self.message.message_sid
+        saved = json.loads(self.journal.db.execute("SELECT original FROM mutation_holds").fetchone()[0])
+        self.assertEqual(saved["arguments"], wire)
+        lookup = FakeOriginalLookup(OriginalOperation(sid, "create_draft_order", normalized, OP_ID))
+        self.binding.original_lookup = lookup
+        self.erp.response = {"success": True, "data": {"ok": True, "state": "completed", "data": {
+            "target_operation_id": OP_ID, "tool_name": "create_draft_order", "phase": "completed",
+            "result": copy.deepcopy(self.order), "next_action": "none",
+        }}}
+        await self.binding.owner_reconcile(sid)
+        self.assertNotEqual(wire, normalized)
+        self.assertEqual(lookup.calls[0]["arguments"], normalized)
+        self.assertEqual(lookup.calls[0]["canonical_payload"],
+                         normalized["lines"])
+        self.assertEqual([call[0] for call in self.erp.calls], ["create_draft_order", "operation_status"])
+
+    async def test_duplicate_products_are_refused_before_claim_or_transport(self):
+        async def duplicate():
+            await self.binding.call("create_draft_order", {"lines": [
+                {"product_id": "tea", "quantity": 1}, {"product_id": "tea", "quantity": 2}]})
+        with self.assertRaises(ValueError):
+            await self.turn(duplicate)
+        self.assertEqual(self.erp.calls, [])
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM mutation_holds").fetchone()[0], 0)
+
+    def test_domain_fingerprints_match_version_aliases_defaults_and_duplicate_refusal(self):
+        self.assertEqual(domain_payload("confirm_order", {"order_id": ORDER_ID, "draft_version": 7}),
+                         {"order_id": ORDER_ID, "version": 7})
+        self.assertEqual(domain_payload("cancel_order", {"order_id": ORDER_ID, "expected_version": 8}),
+                         {"order_id": ORDER_ID, "version": 8})
+        self.assertEqual(domain_payload("request_human_handoff", {}),
+                         {"order_id": None, "reason": "customer_request"})
+        with self.assertRaises(ValueError):
+            domain_payload("create_draft_order", {"lines": [
+                {"product_id": "tea", "quantity": 1}, {"product_id": "tea", "quantity": 2}]})
 
     async def test_late_completed_response_is_recorded_before_turn_expiry_refusal(self):
         original_call = self.erp.call

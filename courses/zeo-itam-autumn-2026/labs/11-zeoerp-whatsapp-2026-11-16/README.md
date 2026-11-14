@@ -11,7 +11,7 @@ Run the offline checks from this folder:
 python3 -m unittest discover -s tests -v
 ```
 
-They use Python's standard library and synthetic customer references. The 37
+They use Python's standard library and synthetic customer references. The 41
 checks cover concurrent pollers, process restart, cursor advancement, changed
 customer bindings, turn cancellation, and uncertain outcomes. They also check
 exact draft versions, separate affirmative replies, closed tool arguments, and
@@ -69,6 +69,13 @@ read resolves it. This maintenance path is absent from model tools and never
 calls a mutation. Missing, mismatched or uncertain lookup results keep the
 hold. The actual owner lookup transport has not been implemented or admitted.
 Older holds without preserved metadata also stay held for an owner audit.
+The hold preserves the original wire arguments. Owner lookup compares their
+normalized semantic form and receives the producer's domain payload too.
+Draft lines sort by product ID without merging duplicates; confirmation and
+cancellation map their version fields to `version`, and handoff includes its
+defaults. Recovery through either owner reconciliation or normal status
+polling stores the recovered draft with its original message ID, prompt and
+version before clearing the hold.
 
 Phone hashes are not anonymization or a security boundary; their small input
 space makes guessing possible. Keep the journal and any preserved arguments

@@ -46,9 +46,12 @@ class OriginalLookupPort(Protocol):
     This is a private maintenance port, not a tenth model tool or an installed
     endpoint. It must authoritatively identify a persisted original operation;
     candidate matching or a caller's assertion is insufficient. No dispatch.
+    Its adapter must recompute domain_payload(tool, arguments) and reject a
+    supplied canonical_payload that differs, before the producer lookup.
     """
 
-    async def lookup_original(self, *, message_sid: str, tool: str, arguments: dict) -> OriginalOperation | None: ...
+    async def lookup_original(self, *, message_sid: str, tool: str, arguments: dict,
+                              canonical_payload: object) -> OriginalOperation | None: ...
 
 
 def canonical(value) -> str:
@@ -101,7 +104,38 @@ def arguments_for(tool: str, arguments: dict) -> dict:
                     raise ValueError("Invalid product ID")
                 if type(line["quantity"]) is not int or not 1 <= line["quantity"] <= 1000:
                     raise ValueError("Invalid quantity")
+            if tool == "create_draft_order" and len({line["product_id"] for line in item}) != len(item):
+                raise ValueError("Duplicate product")
     return value
+
+
+def normalized_arguments(tool: str, arguments: dict) -> dict:
+    """Compare original business arguments by the agreed semantic form."""
+    value = arguments_for(tool, arguments)
+    if tool == "create_draft_order":
+        value["lines"].sort(key=lambda line: line["product_id"])
+    if tool == "request_human_handoff":
+        value.setdefault("reason", "customer_request")
+    return value
+
+
+def domain_payload(tool: str, arguments: dict) -> object:
+    """Translate closed wire arguments to the producer's mutation fingerprint.
+
+    Preserve the original wire tuple separately. Sorting JSON object keys does
+    not normalize a list or translate version fields. The private owner bridge
+    must use this same mapping before its read-only domain lookup.
+    """
+    value = normalized_arguments(tool, arguments)
+    if tool == "create_draft_order":
+        return value["lines"]
+    if tool == "confirm_order":
+        return {"order_id": value["order_id"], "version": value["draft_version"]}
+    if tool == "cancel_order":
+        return {"order_id": value["order_id"], "version": value["expected_version"]}
+    if tool == "request_human_handoff":
+        return {"order_id": value.get("order_id"), "reason": value.get("reason", "customer_request")}
+    raise ValueError("Original lookup requires a mutation tool")
 
 
 def business_envelope(tool: str, response: dict) -> dict:
@@ -169,15 +203,20 @@ class ERPBinding:
             raise HeldOutcome("Original metadata or admitted owner lookup is unavailable")
         customer, encoded = row
         original = json.loads(encoded)
-        expected_arguments = canonical(original["arguments"])
+        expected_arguments = canonical(normalized_arguments(original["tool"], original["arguments"]))
         found = await asyncio.wait_for(self.original_lookup.lookup_original(
-            message_sid=message_sid, tool=original["tool"], arguments=json.loads(expected_arguments)
+            message_sid=message_sid, tool=original["tool"], arguments=json.loads(expected_arguments),
+            canonical_payload=domain_payload(original["tool"], original["arguments"]),
         ), 20)
-        if not isinstance(found, OriginalOperation) or (
-            found.message_sid != message_sid or found.tool != original["tool"]
-            or canonical(found.arguments) != expected_arguments
-            or not re.fullmatch(r"op_[0-9a-f]{24}", found.operation_id)
-        ):
+        if not isinstance(found, OriginalOperation):
+            raise HeldOutcome("Lookup did not establish the exact original operation")
+        try:
+            found_arguments = canonical(normalized_arguments(found.tool, found.arguments))
+        except (ValueError, TypeError):
+            raise HeldOutcome("Lookup returned invalid original arguments") from None
+        if (found.message_sid != message_sid or found.tool != original["tool"]
+                or found_arguments != expected_arguments
+                or not re.fullmatch(r"op_[0-9a-f]{24}", found.operation_id)):
             raise HeldOutcome("Lookup did not establish the exact original operation")
         self.journal.db.execute(
             "UPDATE mutation_holds SET operation_id=? WHERE customer=? AND operation=?",
@@ -203,12 +242,16 @@ class ERPBinding:
                     "data": observed["result"],
                 }})
                 if found.tool == "create_draft_order":
-                    self.journal.db.execute(
-                        "INSERT OR REPLACE INTO reviews VALUES (?, ?, ?)",
-                        (customer, canonical(observed["result"]), message_sid),
-                    )
+                    self._remember_draft(customer, observed["result"], message_sid)
             self._finish_original(customer, operation, found.operation_id, observed["phase"])
         return result
+
+    def _remember_draft(self, customer: str, order: dict, source_sid: str) -> None:
+        if order["state"] == "draft":
+            self.journal.db.execute(
+                "INSERT OR REPLACE INTO reviews VALUES (?, ?, ?)",
+                (customer, canonical(order), source_sid),
+            )
 
     def _finish_original(self, customer: str, operation: str, operation_id: str, phase: str) -> None:
         claim = self.journal.db.execute(
@@ -312,6 +355,9 @@ class ERPBinding:
                                 "ok": True, "state": "completed", "operation_id": arguments["operation_id"],
                                 "data": observed["result"],
                             }})
+                            if original["tool"] == "create_draft_order":
+                                self._remember_draft(self._customer(turn), observed["result"],
+                                                     original["context"]["message_sid"])
                         self._finish_original(self._customer(turn), held[0], arguments["operation_id"], envelope["data"]["phase"])
             if attempt is not None:
                 if envelope["state"] in {"completed", "refused"}:
@@ -333,11 +379,7 @@ class ERPBinding:
             # ordering and provider binding. This snapshot cannot replace it.
             if tool in {"create_draft_order", "order_status"} and envelope["state"] == "completed":
                 order = envelope["data"]
-                if order["state"] == "draft":
-                    self.journal.db.execute(
-                        "INSERT OR REPLACE INTO reviews VALUES (?, ?, ?)",
-                        (self._customer(turn), canonical(order), turn.message.message_sid),
-                    )
+                self._remember_draft(self._customer(turn), order, turn.message.message_sid)
             # Record a received authoritative outcome before fencing a turn
             # that expired while awaiting ERP. Never turn known completion
             # into UNKNOWN merely because its customer response is now late.
