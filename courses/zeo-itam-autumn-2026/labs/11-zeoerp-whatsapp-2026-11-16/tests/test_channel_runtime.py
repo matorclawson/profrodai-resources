@@ -61,6 +61,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.broker.pages.append(IncomingPage(
             tuple(messages),
             PollCursor(messages[-1].sent_at, messages[-1].message_sid) if messages else self.runtime.after,
+            True,
         ))
 
     def tearDown(self):
@@ -142,7 +143,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.page(*cases)
         self.assertEqual(await self.runtime.poll_once(deliver), ["SKIPPED"] * 4 + ["DONE"])
         self.assertEqual(delivered, [cases[-1]])
-        self.broker.pages.append(IncomingPage((replace(self.message, sent_at=self.now),), None))
+        self.broker.pages.append(IncomingPage((replace(self.message, sent_at=self.now),), None, True))
         with self.assertRaises(ValueError):
             await self.runtime.poll_once(deliver)
 
@@ -153,6 +154,56 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await self.runtime.poll_once(deliver)
         self.assertIsNone(self.runtime.after)
+
+    async def test_same_second_late_smaller_sid_is_delivered_once_after_restart(self):
+        delivered = []
+        async def deliver(message):
+            delivered.append(message.message_sid)
+        seen = replace(self.message, message_sid="SM_9")
+        self.page(seen)
+        await self.runtime.poll_once(deliver)
+        self.runtime = self.new_runtime()
+        late = replace(seen, message_sid="SM_2", execution_id="later-retrieval")
+        fresh = replace(seen, message_sid="SM_3", sent_at=seen.sent_at + timedelta(seconds=1))
+        self.page(late, seen, fresh)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["DONE", "DONE", "DONE"])
+        self.assertEqual(delivered, ["SM_9", "SM_2", "SM_3"])
+        self.assertEqual(self.runtime.after.sid, "SM_3")
+        self.runtime = self.new_runtime()
+        self.page(fresh)
+        await self.runtime.poll_once(deliver)
+        self.assertEqual(delivered, ["SM_9", "SM_2", "SM_3"])
+        self.page(seen)
+        with self.assertRaises(ValueError):
+            await self.runtime.poll_once(deliver)
+
+    async def test_partial_last_second_is_deferred_and_replayed_whole_after_restart(self):
+        delivered = []
+        async def deliver(message):
+            delivered.append(message.message_sid)
+        self.page(self.message)
+        await self.runtime.poll_once(deliver)
+        partial = replace(self.message, message_sid="SM_partial_2", sent_at=self.message.sent_at + timedelta(seconds=1))
+        self.broker.pages.append(IncomingPage((self.message, partial),
+                                              PollCursor(partial.sent_at, partial.message_sid), False))
+        self.assertEqual(await self.runtime.poll_once(deliver), ["DONE"])
+        self.assertEqual(delivered, [self.message.message_sid])
+        self.assertEqual(self.runtime.after.date_sent, partial.sent_at)
+        self.runtime = self.new_runtime()
+        earlier_sid = replace(partial, message_sid="SM_partial_1")
+        self.page(earlier_sid, partial)
+        self.assertEqual(await self.runtime.poll_once(deliver), ["DONE", "DONE"])
+        self.assertEqual(delivered, [self.message.message_sid, "SM_partial_1", "SM_partial_2"])
+
+    async def test_single_second_overflow_stops_without_partial_delivery_or_cursor_change(self):
+        async def deliver(_message):
+            self.fail("An incomplete second reached the agent")
+        messages = tuple(replace(self.message, message_sid=f"SM_{number:02}") for number in range(50))
+        self.broker.pages.append(IncomingPage(messages, PollCursor(messages[-1].sent_at, messages[-1].message_sid), False))
+        with self.assertRaises(HeldOutcome):
+            await self.runtime.poll_once(deliver)
+        self.assertIsNone(self.runtime.after)
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0], 0)
 
     async def test_persisted_cursor_and_old_history_survive_restart_and_long_gap(self):
         delivered = []

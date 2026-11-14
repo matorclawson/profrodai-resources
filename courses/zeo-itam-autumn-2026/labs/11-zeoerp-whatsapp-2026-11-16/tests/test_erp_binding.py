@@ -89,7 +89,7 @@ class BindingTests(unittest.IsolatedAsyncioTestCase):
         self.now += timedelta(seconds=1)
         self.message = replace(self.message, message_sid="SM_" + str(self.now.timestamp()).replace(".", "_"),
                                sent_at=self.now - timedelta(microseconds=1), **changes)
-        self.inbound.page = IncomingPage((self.message,), PollCursor(self.message.sent_at, self.message.message_sid))
+        self.inbound.page = IncomingPage((self.message,), PollCursor(self.message.sent_at, self.message.message_sid), True)
         async def deliver(_message):
             await callback()
         return await self.runtime.poll_once(deliver)

@@ -11,7 +11,7 @@ Run the offline checks from this folder:
 python3 -m unittest discover -s tests -v
 ```
 
-They use Python's standard library and synthetic customer references. The 41
+They use Python's standard library and synthetic customer references. The 44
 checks cover concurrent pollers, process restart, cursor advancement, changed
 customer bindings, turn cancellation, and uncertain outcomes. They also check
 exact draft versions, separate affirmative replies, closed tool arguments, and
@@ -59,8 +59,12 @@ The poll cursor is persisted alongside attempt claims. Well-formed messages
 outside the configured scope, time window, or text-only exercise are recorded
 as `SKIPPED` and advance the cursor without reaching Mantle. Invalid transport
 shapes or inconsistent ordering still stop the page before any delivery.
-An inclusive boundary replay is accepted and deduplicated, so either inclusive
-or exclusive provider pagination can resume from the saved cursor.
+Broker paging repeats the entire boundary second. A new message ID can sort
+before the saved ID in that second; it must still reach the journal. Existing
+IDs deduplicate, and older seconds are refused as a transport-contract error.
+Page completeness must be explicit. An incomplete final second is deferred and
+reloaded whole after earlier complete seconds finish. If one second alone
+exceeds the page limit, stop and escalate without partial delivery.
 
 If a mutation response is lost before its operation ID arrives, the hold keeps
 the original tool, arguments and message correlation. A private owner lookup

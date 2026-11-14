@@ -45,6 +45,7 @@ class PollCursor:
 class IncomingPage:
     messages: tuple[IncomingMessage, ...]
     next_after: PollCursor | None
+    complete: bool
 
 
 @dataclass(frozen=True)
@@ -187,9 +188,12 @@ class PollingRuntime:
         return None
 
     def _advance(self, message: IncomingMessage) -> None:
+        self._save_cursor(PollCursor(message.sent_at, message.message_sid))
+
+    def _save_cursor(self, cursor: PollCursor) -> None:
         self.journal.save_cursor(self.scope, self._stream,
-                                 message.sent_at.astimezone(timezone.utc).isoformat(timespec="microseconds"),
-                                 message.message_sid)
+                                 cursor.date_sent.astimezone(timezone.utc).isoformat(timespec="microseconds"),
+                                 cursor.sid)
         saved = self.journal.cursor(self.scope, self._stream)
         self.after = PollCursor(datetime.fromisoformat(saved[0]), saved[1])
 
@@ -203,6 +207,8 @@ class PollingRuntime:
         )
         if not isinstance(page, IncomingPage) or not isinstance(page.messages, tuple) or len(page.messages) > 50:
             raise ValueError("Transport batch exceeds its limit")
+        if type(page.complete) is not bool:
+            raise ValueError("Transport page completeness is not established")
         batch = page.messages
         # Validate the whole batch before allowing any turn to start.
         for message in batch:
@@ -210,13 +216,23 @@ class PollingRuntime:
         cursors = [PollCursor(item.sent_at, item.message_sid) for item in batch]
         if cursors != sorted(cursors):
             raise ValueError("Transport page is not ordered")
-        # Accept either an exclusive page or an inclusive boundary replay.
-        # The persisted SID claim handles equality without another delivery;
-        # observations older than the requested cursor remain a wire error.
-        if self.after is not None and any(item < self.after for item in cursors):
-            raise ValueError("Transport returned messages before its cursor")
+        # Broker replays the entire boundary second. A newly observed SID may
+        # sort before the saved SID: provider IDs are not chronological.
+        if self.after is not None and any(item.date_sent < self.after.date_sent for item in cursors):
+            raise ValueError("Transport returned messages before its boundary second")
         if page.next_after != (cursors[-1] if cursors else self.after):
             raise ValueError("Transport returned an inconsistent next cursor")
+        pending_boundary = None
+        if not page.complete:
+            if not batch:
+                raise ValueError("An incomplete page cannot be empty")
+            # Only earlier complete seconds may be delivered. Resume at the
+            # partial second inclusively, so none of its unseen SIDs is lost.
+            boundary = batch[-1].sent_at
+            safe = tuple(item for item in batch if item.sent_at < boundary)
+            if not safe:
+                raise HeldOutcome("One boundary second exceeds the page; owner intervention is required")
+            batch, pending_boundary = safe, page.next_after
         results = []
         for message in sorted(batch, key=lambda item: (item.sent_at, item.message_sid)):
             binding = {
@@ -255,6 +271,8 @@ class PollingRuntime:
                 turn.active = False
                 _current.reset(token)
             self._advance(message)
+        if pending_boundary is not None:
+            self._save_cursor(pending_boundary)
         return results
 
     async def reply(self, text: str) -> str:
