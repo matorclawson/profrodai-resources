@@ -3,7 +3,10 @@
 The launcher must supply the reviewed session factory and full producer-schema
 validator. This module opens no socket and supplies no authentication. It does
 not use the SDK's TypeError compatibility fallback or infer business completion
-from MCP transport success. ERPBinding owns the durable mutation claim.
+from MCP transport success. This adapter owns no attempt journal or deadline.
+Callers must claim mutations durably, retain uncertain outcomes, and bound the
+whole session lifecycle, including callers outside a channel turn. ERP must
+independently enforce replay protection for the channel and native request ID.
 """
 
 from __future__ import annotations
