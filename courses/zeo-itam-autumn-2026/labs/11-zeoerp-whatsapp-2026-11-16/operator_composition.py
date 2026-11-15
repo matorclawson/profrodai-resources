@@ -54,7 +54,8 @@ def source_identity():
              "commerce_schema.py", "core_binding.py", "mantle_tools.py", "mcp_port.py",
              "native_sessions.py", "native_mantle.py", "operator_admin.py", "operator_claims.py",
              "operator_composition.py", "operator_runtime.py", "producer_owner.py", "contracts/commerce-mcp-v1.json",
-             "native-agent/agent.yml", "native-agent/integrations.yml", "native-agent/tools/commerce.py")
+             "native-agent/agent.yml", "native-agent/integrations.yml", "native-agent/tools/commerce.py",
+             "consumer-runtime/pyproject.toml", "consumer-runtime/uv.lock")
     manifest = "\n".join(f"{hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}" for name in names) + "\n"
     return "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
 
@@ -154,7 +155,7 @@ async def customer_runtime(settings: OperatorSettings, *, admitted_broker_client
         port = AuthorizedERPPort(SessionERPPort(sessions, schemas), claims)
         binding = CoreBinding(port, journal, claims, clock=clock)
         async with native_mantle(settings.model, binding=binding, clock=clock) as agent:
-            yield OperatorRuntime(claims=claims, evidence=evidence, native_agent=agent,
+            yield OperatorRuntime(claims=claims, evidence=evidence, operation_journal=journal, native_agent=agent,
                                   bounds=settings.bounds, clock=clock)
     finally:
         if journal is not None:

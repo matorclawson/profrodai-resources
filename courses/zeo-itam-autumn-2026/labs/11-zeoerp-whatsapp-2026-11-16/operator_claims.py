@@ -191,6 +191,8 @@ class ClaimJournal:
             self.db.close()
             raise
         if not read_only:
+            self.db.execute("CREATE TABLE IF NOT EXISTS operator_run_draft ("
+                            "singleton INTEGER PRIMARY KEY CHECK(singleton=1), selector TEXT UNIQUE NOT NULL)")
             self.db.execute("CREATE TABLE IF NOT EXISTS operator_turns (request_id TEXT PRIMARY KEY, "
                         "observation_sha TEXT UNIQUE NOT NULL, update_id INTEGER NOT NULL, "
                         "request_json TEXT NOT NULL, bound_json TEXT NOT NULL)")
@@ -410,6 +412,10 @@ class ClaimJournal:
             return self.resolve_verified_call(selector, action, hashed, now_epoch=self.clock().timestamp())
         request = self._load_request(row[0])
         observed, _ = self._turn(request)
+        if action == "create_draft_order":
+            self.db.execute("INSERT OR IGNORE INTO operator_run_draft VALUES(1,?)", (selector,))
+            if self.db.execute("SELECT selector FROM operator_run_draft WHERE singleton=1").fetchone() != (selector,):
+                raise PermissionError("ONE_ORIGINAL_DRAFT_PER_OPERATOR_RUN")
         approval = VerifiedDraftApproval.model_validate_json(row[2]) if row[2] else None
         claim = VerifiedCallClaim(run_id=self.run_id, selector=selector, company_id=request.company_id,
             channel="telegram", user_id=request.user_id, request_id=request.request_id, action=action,
@@ -466,10 +472,6 @@ class AuthorizedERPPort:
 
     async def call(self, tool, arguments, *, context_header):
         self.validate_schema(tool, "input", arguments)
-        if tool == "create_draft_order" and self.claims.db.execute(
-                "SELECT 1 FROM operator_calls WHERE action='create_draft_order' "
-                "AND arguments_sha IS NOT NULL AND selector<>?", (context_header,)).fetchone():
-            raise PermissionError("ONE_ORIGINAL_DRAFT_PER_OPERATOR_RUN")
         self.claims.bind_arguments(context_header, tool, arguments)
         payload = await self.port.call(tool, arguments, context_header=context_header)
         self.claims.observe_draft_result(context_header, tool, payload)

@@ -61,7 +61,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.agent = Agent()
         self.bounds = RunBounds(max_inbound_turns=1, turn_seconds=30,
                                 not_after_epoch=(NOW + timedelta(minutes=10)).timestamp())
-        self.runtime = OperatorRuntime(claims=self.claims, evidence=self.evidence, native_agent=self.agent,
+        self.runtime = OperatorRuntime(claims=self.claims, evidence=self.evidence, operation_journal=self.journal, native_agent=self.agent,
                                       bounds=self.bounds, clock=lambda: self.now)
 
     async def asyncTearDown(self):
@@ -90,7 +90,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.client.calls), 1)  # initial read only, no send
         self.assertEqual(self.claims.db.execute("SELECT state FROM native_turn_attempts").fetchone()[0], "HELD")
         with self.assertRaisesRegex(PermissionError, "REQUIRES_AUDIT"):
-            OperatorRuntime(claims=self.claims, evidence=self.evidence, native_agent=self.agent,
+            OperatorRuntime(claims=self.claims, evidence=self.evidence, operation_journal=self.journal, native_agent=self.agent,
                             bounds=self.bounds, clock=lambda: self.now)
 
     async def test_unknown_reply_remains_held_without_second_send(self):
@@ -130,3 +130,68 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await task
         self.assertTrue(ended.is_set())
+
+    async def test_model_cannot_hide_unknown_mutation_with_later_successful_read(self):
+        original_call = self.binding.port.port.call
+
+        async def port_call(tool, arguments, *, context_header):
+            if tool == "create_draft_order":
+                raise TimeoutError("synthetic unknown mutation")
+            return await original_call(tool, arguments, context_header=context_header)
+        self.binding.port.port.call = port_call
+
+        async def continued_model_turn(request):
+            try:
+                await self.binding.call("create_draft_order", {"lines": [{"product_id": "tea", "quantity": 1}]})
+            except Exception:
+                pass  # Simulates the model continuing after a tool error.
+            await self.binding.call("list_products", {})
+        self.agent.turn = continued_model_turn
+        self.client.responses.append(response({"confirmation": "recorded"}))
+        await self.runtime.handle(self.command)
+        self.assertIn("held or pending", self.client.calls[-1]["arguments"]["text"])
+        self.assertNotIn("EUR 1.23", self.client.calls[-1]["arguments"]["text"])
+        self.assertEqual(self.journal.db.execute("SELECT COUNT(*) FROM commerce_holds").fetchone()[0], 1)
+
+    async def test_status_of_already_reviewed_draft_never_sends_another_review(self):
+        self.runtime.bounds = RunBounds(max_inbound_turns=3, turn_seconds=30,
+                                       not_after_epoch=(NOW + timedelta(minutes=10)).timestamp())
+        draft = {"order_id": "ord_" + "1" * 24, "customer_id": self.claims._row().erp_customer_id,
+            "state": "draft", "version": 1,
+            "lines": [{"product_id": "tea", "quantity": 2, "unit_price_minor": 123,
+                       "currency": "EUR", "scale": 2}], "currency": "EUR", "scale": 2,
+            "total_minor": 246, "expires_at_epoch": (NOW + timedelta(minutes=5)).timestamp(),
+            "operation_id": "test_operation"}
+
+        async def port_call(tool, arguments, *, context_header):
+            return {"success": True, "data": {"ok": True, "state": "completed", "projection": "confirmed",
+                    "data": draft, "operation_id": "test_operation"}}
+        self.binding.port.port.call = port_call
+
+        async def create(request):
+            await self.binding.call("create_draft_order", {"lines": [{"product_id": "tea", "quantity": 2}]})
+        self.agent.turn = create
+        self.client.responses.append(response({"confirmation": "recorded"}))
+        await self.runtime.handle(self.command)
+        original_review = self.claims.db.execute("SELECT review_json FROM operator_reviews").fetchone()[0]
+        self.assertIn("Reply yes or confirm", self.client.calls[-1]["arguments"]["text"])
+        self.now += timedelta(seconds=2)
+        self.client.responses.append(page([update(12, text="status", date=int(self.now.timestamp()))]))
+        status_sha = self.evidence.poll(after_update_id=11)[0]
+
+        async def status(request):
+            await self.binding.call("order_status", {"order_id": draft["order_id"]})
+        self.agent.turn = status
+        self.client.responses.append(response({"confirmation": "recorded"}))
+        await self.runtime.handle(status_sha)
+        status_reply = self.client.calls[-1]["arguments"]["text"]
+        self.assertIn("version 1: draft", status_reply)
+        self.assertNotIn("Reply yes or confirm", status_reply)
+        self.assertEqual(self.claims.db.execute("SELECT review_json FROM operator_reviews").fetchall(), [(original_review,)])
+        self.assertEqual(self.claims.db.execute("SELECT state FROM native_turn_attempts ORDER BY rowid").fetchall(), [("DONE",), ("DONE",)])
+        self.now += timedelta(seconds=1)
+        self.client.responses.append(page([update(13, text="yes", date=int(self.now.timestamp()))]))
+        yes_sha = self.evidence.poll(after_update_id=12)[0]
+        yes = self.claims.register_turn(yes_sha, deadline=self.now + timedelta(seconds=30))
+        with self.assertRaisesRegex(PermissionError, "FIRST_EXACT"):
+            await self.claims.approval_for(yes, order_id=draft["order_id"], draft_version=1)

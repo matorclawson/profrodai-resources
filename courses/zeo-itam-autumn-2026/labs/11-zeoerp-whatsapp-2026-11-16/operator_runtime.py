@@ -48,8 +48,9 @@ async def drain_worker(function, *args, **kwargs):
 
 
 class OperatorRuntime:
-    def __init__(self, *, claims, evidence, native_agent, bounds: RunBounds, clock):
+    def __init__(self, *, claims, evidence, operation_journal, native_agent, bounds: RunBounds, clock):
         self.claims, self.evidence, self.agent = claims, evidence, native_agent
+        self.operations = operation_journal
         self.bounds, self.clock = RunBounds.model_validate(bounds), clock
         if self.bounds.not_after_epoch > claims.run_expires:
             raise ValueError("RUN_DEADLINE_MUST_NOT_OUTLIVE_CLAIMS")
@@ -60,7 +61,8 @@ class OperatorRuntime:
             raise PermissionError("ORIGINAL_NATIVE_TURN_REQUIRES_AUDIT")
 
     def _draft_for(self, request):
-        rows = self.claims.db.execute("SELECT payload_json FROM operator_drafts WHERE request_id=?",
+        rows = self.claims.db.execute("SELECT d.payload_json FROM operator_drafts d LEFT JOIN operator_reviews r ON r.order_id=d.order_id "
+                                      "WHERE d.request_id=? AND r.order_id IS NULL",
                                       (request.request_id,)).fetchall()
         if len(rows) > 1:
             raise PermissionError("ONE_EXACT_DRAFT_REVIEW_PER_TURN")
@@ -72,6 +74,9 @@ class OperatorRuntime:
         The model chooses tools and arguments. Host wording prevents a model
         response from asserting a commit that the actual ERP result did not show.
         """
+        customer = hashlib.sha256(canonical((request.company_id, request.channel, request.user_id)).encode()).hexdigest()
+        if self.operations.db.execute("SELECT 1 FROM commerce_holds WHERE customer=?", (customer,)).fetchone():
+            return "The original order operation is held or pending. Its result needs inspection; do not submit it again."
         rows = self.claims.db.execute("SELECT c.action,r.payload_json FROM operator_calls c "
             "JOIN operator_results r ON r.selector=c.selector WHERE c.request_id=? ORDER BY c.rowid",
             (request.request_id,)).fetchall()
@@ -96,8 +101,15 @@ class OperatorRuntime:
             return "\n".join(lines) or "No products are currently available."
         if action in {"confirm_order", "cancel_order", "order_status"}:
             return f"Order {data['order_id']}, version {data['version']}: {data['state']}. Sheet projection: {result['projection']}."
-        # Exact validated reads remain bounded; no model-invented values/claims.
-        return "Shop result: " + canonical(data)
+        if action == "check_stock":
+            return "\n".join(f"{item['product_id']}: requested {item['quantity']}; available {item['available']}."
+                             for item in data) or "No stock lines were returned."
+        if action == "my_orders":
+            return "\n".join(f"Order {item['order_id']}, version {item['version']}: {item['state']}."
+                             for item in data) or "No orders were found for this operator."
+        if action == "create_draft_order":
+            return f"Order {data['order_id']}, version {data['version']}: {data['state']}."
+        raise ValueError("KNOWN_HOST_REPLY_REQUIRED")
 
     async def handle(self, observation_sha):
         if self.busy:

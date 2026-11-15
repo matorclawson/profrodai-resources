@@ -60,7 +60,8 @@ async def native_mantle(source: NativeModelSource, *, binding: CoreBinding, cloc
         raise TypeError("ONE_ADMITTED_CORE_BINDING_REQUIRED")
     if hashlib.sha256(project_manifest(source.project).encode()).hexdigest() != source.manifest_sha256:
         raise PermissionError("REVIEWED_NATIVE_PROJECT_CHANGED")
-    if version("rasa-pro") != "3.21.0.dev5" or version("mcp") != "1.28.1":
+    if (version("rasa-pro") != "3.21.0.dev5" or version("mcp") != "1.28.1"
+            or version("zeocore") != "0.53.5" or version("pydantic") != "2.13.5"):
         raise RuntimeError("INSTALLED_NATIVE_RUNTIME_PIN_CHANGED")
     if not os.environ.get("RASA_LICENSE") or not os.environ.get("OPENAI_API_KEY"):
         raise PermissionError("EXISTING_CODESPACE_LICENSE_AND_MODEL_ENV_REQUIRED")

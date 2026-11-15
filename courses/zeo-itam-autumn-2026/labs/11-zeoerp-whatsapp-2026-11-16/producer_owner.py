@@ -13,16 +13,25 @@ from operator_composition import (OperatorSettings, check_mapping,
                                   launcher_admin_capability, producer_claim_resolver)
 
 
+def check_notice_fence(scope, notice_expect):
+    from zeo_core.integrations.hosted.client import HostedExpectedBinding
+    if (type(notice_expect) is not HostedExpectedBinding
+            or notice_expect.external_identity != scope.bot_binding
+            or notice_expect.connection_revision != scope.connection_revision):
+        raise PermissionError("EXACT_OPERATOR_NOTICE_FENCE_REQUIRED")
+
+
 @contextmanager
 def producer_owner(settings: OperatorSettings, hosted_config, *, sheets_client,
                    sheets_expect, notice_client, notice_expect, clock):
     """Yield one HostedPollRun for its MCP app and one explicit shipping poll."""
+    settings = OperatorSettings.model_validate(settings)
+    check_notice_fence(settings.scope, notice_expect)
     from zeoerp.producer_authority import ProducerAuthority
     from zeoerp.admin_authority import OperatorAdminAuthority, CustomerAndAdminAuthority
     from zeoerp.hosted import HostedConfig, HostedPollRun, build_hosted_service
     from zeoerp.notices import NoticePermit
 
-    settings = OperatorSettings.model_validate(settings)
     config = HostedConfig.model_validate(hosted_config)
     row = check_mapping(settings, clock)
     route = config.notice_route

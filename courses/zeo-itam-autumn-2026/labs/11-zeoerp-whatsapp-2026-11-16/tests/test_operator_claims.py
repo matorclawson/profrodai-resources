@@ -251,6 +251,21 @@ class ClaimTests(unittest.IsolatedAsyncioTestCase):
                 {"lines": [{"product_id": "tea", "quantity": 1}]}, context_header=bound.selector)
         self.assertEqual(calls, [])
 
+    async def test_concurrent_draft_claims_have_one_atomic_original(self):
+        request = self.turn(11, "tea")
+        bounds = [await self.claims.bind(request, tool="create_draft_order", approval=None) for _ in range(8)]
+        arguments = {"lines": [{"product_id": "tea", "quantity": 1}]}
+
+        def attempt(bound):
+            try:
+                return self.claims.bind_arguments(bound.selector, "create_draft_order", arguments).selector
+            except PermissionError:
+                return None
+        outcomes = await asyncio.gather(*(asyncio.to_thread(attempt, bound) for bound in bounds))
+        winners = [value for value in outcomes if value is not None]
+        self.assertEqual(len(winners), 1)
+        self.assertEqual(self.claims.db.execute("SELECT selector FROM operator_run_draft").fetchall(), [(winners[0],)])
+
 
 if __name__ == "__main__":
     unittest.main()

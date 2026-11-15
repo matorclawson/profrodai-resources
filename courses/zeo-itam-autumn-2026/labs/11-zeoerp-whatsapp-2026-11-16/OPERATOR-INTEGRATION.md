@@ -44,3 +44,11 @@ interpreters. Preserve exact source pins, input bounds, retained responses,
 model-call counts, business operation and projection results, and shutdown
 outcomes. Run only inside the explicitly authorized operator window. Preserve
 NOT_RUN until an actual complete run produces those results.
+
+The dedicated consumer project is `consumer-runtime`. Its universal lock keeps
+Rasa 3.21.0.dev5, MCP 1.28.1, Pydantic 2.13.5 and Core 0.53.5. Core is built
+from repository commit f050584b074b5fb6be5dad351b50ca4843e37f45, not the public
+package index. The consumer lock is distinct from the producer's MCP 2.3 lock.
+Do not install it into an existing bank-example or producer environment.
+The source identity includes this lock. Dependency resolution alone is not an
+installation, native qualification, paired-device approval or completed run.
