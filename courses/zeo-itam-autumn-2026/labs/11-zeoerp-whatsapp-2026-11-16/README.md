@@ -1,45 +1,50 @@
 # Shop core with a custody-backed channel
 
-The current caller targets the seven commerce tools in the frozen contract.
-It is source preparation, not a runnable or qualified Mantle agent.
+The caller targets the seven commerce tools in the frozen contract. The new
+operator-only Telegram composition has source and offline tests. It has not
+completed a live end-to-end model, Telegram, Sheet and shipping-notice run.
 
-Run the offline policy checks from this folder:
+Run the offline checks from this folder in an existing Python environment with
+Pydantic v2 and JSON Schema support:
 
 ```sh
 python3 -B -m unittest discover -s tests -v
 ```
 
-These checks use synthetic requests, a fake authentication bridge, and an
-already-validated fake port. They do not import ERP, Rasa, MCP, or a provider.
-The selected native wrapper bodies are checked with fake decorator and result
-objects; that check does not import Mantle.
+Tests use synthetic clients and model boundaries. They test real local journals,
+concurrent read-only verification, exact draft approval, incomplete polling,
+restart after uncertain sends and draining a worker during cancellation. They
+make no provider call and do not qualify a live credential or customer binding.
 
-`mantle_tools.py` exposes exactly seven tools. Catalog and order-list calls
-send empty arguments. `core_binding.py` reads the trusted turn outside model
-arguments. Its injected bridge must independently authenticate the request and
-verify the exact draft approval. A header or nonempty selector is correlation,
-not authentication. The real bridge is not implemented here.
+`operator_composition.py` connects the admitted Broker client, evidence journal,
+claim issuer, seven-tool policy, pinned MCP sessions and native Mantle lifecycle.
+`producer_owner.py` composes the corresponding ERP customer authority and the
+separate host-local admin capability in the producer process. It needs the
+producer's receiving adapters, actual owner clients and exact Sheet settings.
+The admin object never crosses a process boundary or enters a model tool.
 
-A committed order whose projection is pending remains pending. Its original
-request, operation, and record stay held; later writes cannot replace it with a
-new request. A scoped status read can resolve a known pending projection only
-when its exact order and version are projected. The original operation reference
-is retained even when the status response omits it. A lost operation ID
-requires the ERP owner's read-only recovery path. That path remains open;
-there is no extra recovery tool or automatic mutation replay.
+`broker_evidence.py` retains the SDK request and response before exposing an
+inbound observation. It requires a confirmed connection fence, a complete poll
+chain and the approved operator mapping. An incomplete poll stays held. Raw
+unusable replies remain present, so a later yes cannot erase the first reply.
+A typed record, body hash or request header alone is not authentication.
 
-`mcp_port.py` makes one tool call and requires matching structured and JSON text
-results. `commerce_schema.py` pins the complete input and output schemas and
-checks the initialized server's advertised schemas. Its JSON Schema dependency
-comes from the selected MCP runtime. This checkout has not executed that
-validator or installed its dependency. Native cross-version client/server tests
-and the context-bound session factory remain unfinished.
+The model chooses tools and arguments. The host renders actual ERP results and
+the exact priced draft review. Confirmation needs a separate first affirmative,
+the original confirmed review receipt, matching order and version, and current
+run, map and draft lifetimes. Only one original draft is allowed per run. An
+uncertain mutation or send never becomes permission to repeat it.
 
-The next integration must run the actual ERP server with its in-memory fake.
-Telegram through the Broker fake follows that core test. WhatsApp is a separate
-adapter. Provider tokens stay in Broker custody. No live authentication, model
-call, channel exchange, listening service, or host deployment is qualified by
-these files.
+`native-agent` contains the model project, with seven imported native tools and
+one configured OpenAI model. Credentials are environment references. The native
+adapter requires the existing Rasa 3.21.0.dev5 and MCP 1.28.1 installations; it
+installs nothing. The native prompt budget is the SDK's trimming setting, not a
+proof that every request fits that token count. Actual model behavior and call
+accounting still need the bounded rehearsal.
+
+`OPERATOR-INTEGRATION.md` lists the explicit owner inputs and remaining run
+qualification. These files do not choose a paired device, supply a credential,
+start a listener or assert live readiness on import.
 
 The code below describes the preserved earlier prototype. `erp_binding.py`
 and its tests belong to that older contract; the current Mantle tool wrapper
