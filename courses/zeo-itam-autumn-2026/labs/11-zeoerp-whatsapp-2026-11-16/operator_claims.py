@@ -403,6 +403,16 @@ class ClaimJournal:
     def bind_arguments(self, selector, action, arguments):
         if self.read_only:
             raise PermissionError("READ_ONLY_CLAIM_RESOLVER")
+        if not self._lock.acquire(timeout=1):
+            raise PermissionError("CLAIM_BIND_BUSY")
+        try:
+            return self._bind_arguments(selector, action, arguments)
+        finally:
+            self._lock.release()
+
+    def _bind_arguments(self, selector, action, arguments):
+        # One shared SQLite connection must not interleave statement sequences.
+        # The reentrant lock also covers the existing claim-resolution lookup.
         row = self.db.execute("SELECT request_id,action,approval_json,arguments_sha,claim_json "
                               "FROM operator_calls WHERE selector=?", (selector,)).fetchone()
         hashed = digest(arguments)

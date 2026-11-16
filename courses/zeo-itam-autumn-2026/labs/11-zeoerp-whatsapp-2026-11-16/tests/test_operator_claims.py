@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import threading
 
 from class_fixture_binding import (BrokerScope, FixtureMap, FixtureRefused, MessageUpdate,
     PersistedObservation, observation_digest, propose_row)
@@ -250,6 +251,44 @@ class ClaimTests(unittest.IsolatedAsyncioTestCase):
             await AuthorizedERPPort(Port(), self.claims).call("create_draft_order",
                 {"lines": [{"product_id": "tea", "quantity": 1}]}, context_header=bound.selector)
         self.assertEqual(calls, [])
+
+    async def test_busy_argument_binding_refuses_before_reading_or_claiming(self):
+        request = self.turn(11, "tea")
+        bound = await self.claims.bind(request, tool="create_draft_order", approval=None)
+        arguments = {"lines": [{"product_id": "tea", "quantity": 1}]}
+        ready, release = threading.Event(), threading.Event()
+        queries = []
+        self.claims.db.set_trace_callback(queries.append)
+
+        def hold_journal():
+            with self.claims._lock:
+                ready.set()
+                release.wait(timeout=5)
+
+        holder = threading.Thread(target=hold_journal)
+        holder.start()
+        self.assertTrue(ready.wait(timeout=2))
+        try:
+            with self.assertRaisesRegex(PermissionError, "CLAIM_BIND_BUSY"):
+                self.claims.bind_arguments(bound.selector, "create_draft_order", arguments)
+            self.assertEqual(queries, [])
+        finally:
+            release.set()
+            holder.join(timeout=2)
+            self.claims.db.set_trace_callback(None)
+        self.assertFalse(holder.is_alive())
+        claim = self.claims.bind_arguments(bound.selector, "create_draft_order", arguments)
+        self.assertEqual(claim.selector, bound.selector)
+
+    async def test_refused_argument_binding_releases_the_journal_for_other_threads(self):
+        request = self.turn(11, "tea")
+        bound = await self.claims.bind(request, tool="create_draft_order", approval=None)
+        arguments = {"lines": [{"product_id": "tea", "quantity": 1}]}
+        with self.assertRaisesRegex(PermissionError, "EXACT_CLAIM_ARGUMENTS_REQUIRED"):
+            self.claims.bind_arguments(bound.selector, "cancel_order", arguments)
+        claim = await asyncio.to_thread(self.claims.bind_arguments, bound.selector,
+                                       "create_draft_order", arguments)
+        self.assertEqual(claim.selector, bound.selector)
 
     async def test_concurrent_draft_claims_have_one_atomic_original(self):
         request = self.turn(11, "tea")
