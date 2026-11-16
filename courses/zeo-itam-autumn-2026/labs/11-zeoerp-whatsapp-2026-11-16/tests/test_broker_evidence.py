@@ -9,8 +9,8 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from broker_evidence import BrokerEvidence, HeldBrokerOutcome
-from class_fixture_binding import BrokerScope, observation_digest
+from broker_evidence import BrokerEvidence, BrokerEvidenceReader, HeldBrokerOutcome
+from class_fixture_binding import BrokerScope, MessageUpdate, PersistedObservation, observation_digest
 
 
 SCOPE = BrokerScope(company_id="test_erp", connection_id="test_connection",
@@ -64,6 +64,59 @@ def request_and_claims():
 
 
 class BrokerEvidenceTests(unittest.TestCase):
+    def test_chat_type_keeps_strict_validation_and_original_field_presence(self):
+        originals = [update(10)] + [update(10, chat_type=value) for value in
+                     (None, "private", "group", "supergroup", "channel")]
+        hashes = []
+        for raw in originals:
+            with self.subTest(raw=raw):
+                typed = MessageUpdate.model_validate(raw)
+                self.assertEqual(typed.model_dump(mode="json"), raw)
+                observed = PersistedObservation(scope=SCOPE, update=typed,
+                                                response_sha256="1" * 64)
+                restored = PersistedObservation.model_validate_json(observed.model_dump_json())
+                self.assertEqual(restored.update.model_dump(mode="json"), raw)
+                hashes.append(observation_digest(restored))
+        self.assertEqual(hashes[0], "467754177d931e974482b7df527bc6aad891cc1f8bbae1a4da3d52a129c00bde")
+        self.assertEqual(len(set(hashes)), len(originals))
+        for value in ("PRIVATE", "future", 1, True, {}, []):
+            with self.subTest(invalid=value), self.assertRaises(ValueError):
+                MessageUpdate.model_validate(update(10, chat_type=value))
+        with self.assertRaises(ValueError):
+            MessageUpdate.model_validate(update(10, chat_type="private", unexpected=True))
+
+    def test_chat_type_rows_and_legacy_rows_survive_durable_reader(self):
+        originals = [update(10)] + [update(10, chat_type=value) for value in
+                     (None, "private", "group", "supergroup", "channel")]
+        for number, raw in enumerate(originals):
+            with self.subTest(raw=raw):
+                directory = self.root / str(number)
+                directory.mkdir()
+                evidence, client = store(directory, [page([raw])])
+                try:
+                    shas = evidence.poll(after_update_id=9)
+                    self.assertEqual(len(shas), 1)
+                    self.assertEqual(len(client.calls), 1)
+                finally:
+                    evidence.close()
+                reader = BrokerEvidenceReader(directory / "broker.sqlite3",
+                    run_id="test_run", scope=SCOPE)
+                try:
+                    original = reader.observation_reader(shas[0])
+                    self.assertEqual(original.update.model_dump(mode="json"), raw)
+                    self.assertEqual(observation_digest(original), shas[0])
+                finally:
+                    reader.close()
+
+    def test_observed_private_type_does_not_replace_operator_fixture_review(self):
+        from class_fixture_binding import propose_row
+        observation = PersistedObservation(scope=SCOPE,
+            update=MessageUpdate.model_validate(update(10, chat_type="private")),
+            response_sha256="1" * 64)
+        with self.assertRaisesRegex(ValueError, "REVIEWED_PRIVATE_CHAT_REQUIRED"):
+            propose_row(observation, erp_customer_id="test_customer",
+                        known_private_chat=False)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)

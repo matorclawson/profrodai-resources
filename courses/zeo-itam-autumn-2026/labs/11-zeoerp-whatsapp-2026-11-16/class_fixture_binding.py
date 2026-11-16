@@ -13,7 +13,7 @@ from pathlib import Path
 import sqlite3
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 
 CLASS_END = datetime(2026, 11, 17, 23, 59, tzinfo=timezone.utc)
@@ -42,6 +42,17 @@ class MessageUpdate(Boundary):
     text: str = Field(min_length=1, max_length=4096)
     message_id: int = Field(gt=0, le=2**53)
     date: int = Field(ge=0, le=2**53)
+    chat_type: Literal["private", "group", "supergroup", "channel"] | None = None
+
+    @model_serializer(mode="wrap")
+    def preserve_provider_field_presence(self, handler):
+        # Older retained originals omit chat_type. Do not invent a null key in
+        # their exact comparison or approved observation digest. An explicitly
+        # observed null remains present and distinct from an omitted field.
+        result = handler(self)
+        if "chat_type" not in self.model_fields_set:
+            result.pop("chat_type", None)
+        return result
 
     @model_validator(mode="after")
     def require_unambiguous_text_bound(self):
