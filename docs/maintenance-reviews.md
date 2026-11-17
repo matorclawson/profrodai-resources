@@ -45,3 +45,7 @@ sow: public. This maintenance review was assigned by the maintainer’s operator
 ## 2026-11-09: operator acceptance of the November 8 catalog review
 
 sow: public. The operator accepted the [November 8 provenance review](maintenance-evidence/2026-11-08-catalog-provenance.md). [Acceptance and required separate correction](maintenance-evidence/2026-11-09-catalog-acceptance.md) record the boundary: review date November 8, next due December 9; repin the source index, remove the two retired sources and review the 22 changed pages in a separate pull request during the same week. The earlier pending entry and failed gate evidence remain historical records, not a claim that acceptance or the correction happened earlier.
+
+## November 17, 2026: one-day remaining deadline for locked-dependency maintenance
+
+The [documented temporary deadline](maintenance-evidence/2026-11-17-deadline.md) preserves the last complete review date, November 8. For this interval only, the cadence is ten days and the next deadline is November 18. The known Tornado 6.6 advisory and incomplete review remain explicit. No lockfile, dependency declaration, validator, other maintenance area, live-service acceptance, or security result changes. The operator accepts this scheduling decision by merging the reviewed pull request.
