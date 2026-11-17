@@ -16,6 +16,7 @@ The class is about one idea: a shop assistant that tells everyone how many tubs 
 
 - A GitHub account that can open a Codespace.
 - Three keys, added as Codespaces secrets in your own GitHub settings and made available to this repository: `RASA_LICENSE`, `OPENAI_API_KEY` and `DEEPGRAM_API_KEY`. They are never written into any file here.
+- This lab uses the prerelease `rasa-pro` 3.21.0.dev5, exactly as tested. Newer versions exist and may behave differently.
 - The shop PIN, `OWNER_PIN` in `shop.py` (see "Who is Lucy"). Change it before class.
 
 ## Open it
