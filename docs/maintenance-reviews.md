@@ -24,12 +24,12 @@ These were overdue since 2026-09-27 and 2026-09-03, and `curriculum-maintenance`
 
 ## 2026-10-18: locked-dependencies (owner: maintainer)
 
-The overdue review was performed under the explicit amendment of profrod-SOW-338.
+The overdue review was performed under the explicit approval of the maintainer’s operator.
 [Commands, raw-output hashes, dependency-by-dependency decisions and limits](maintenance-evidence/2026-10-18.md) record the actual review. npm audit reports zero vulnerabilities, all five API tests and TypeScript pass, and `uv lock --check` passes using CPython 3.12.13. New releases were reviewed without changing either lockfile: retain the tested Express 4 / Node 24 / TypeScript 5 / Vitest 4 course baseline and the compatible Python graph, with no reported advisory requiring an emergency bump. Only this maintainer-owned review date is renewed to 2026-10-18, due 2026-10-25; this is not a claim that all dependencies are latest or that all notebooks have been executed.
 
 ## 2026-10-27: locked-dependencies (owner: maintainer)
 
-The review was due 2026-10-25 and was performed by the maintainer seat under the Architect's approval `ans_0e1e3fffeb2fe928` (sow: profrod-ops-SOW-01).
+The review was due 2026-10-25 and was performed under the approval recorded for that review.
 [Commands, raw-output hashes, the one change and limits](maintenance-evidence/2026-10-27.md) record the actual review. **One package changed:** `qs` 6.16.0 to 6.16.1 in `courses/agentic-coding-with-cursor/order-api/package-lock.json` only, for GHSA-6pq8-jhm2-2vcw (published 2026-10-27, first patched 6.16.1), inside Express's declared `qs ~6.16.0` range; `package.json` and `uv.lock` are unchanged and 6.17.0 was not taken. After the change `npm audit` reports zero vulnerabilities, all five API tests and TypeScript pass, and `uv lock --check` passes using CPython 3.12.13; the exact-version PyPI metadata check reports no vulnerability and no yanked locked release. No other bump is proposed. Only this maintainer-owned review date is renewed to 2026-10-27, due 2026-11-03; this is not a claim that all dependencies are latest or that all notebooks have been executed.
 
 
@@ -45,3 +45,7 @@ sow: public. This maintenance review was assigned by the maintainer’s operator
 ## 2026-11-09: operator acceptance of the November 8 catalog review
 
 sow: public. The operator accepted the [November 8 provenance review](maintenance-evidence/2026-11-08-catalog-provenance.md). [Acceptance and required separate correction](maintenance-evidence/2026-11-09-catalog-acceptance.md) record the boundary: review date November 8, next due December 9; repin the source index, remove the two retired sources and review the 22 changed pages in a separate pull request during the same week. The earlier pending entry and failed gate evidence remain historical records, not a claim that acceptance or the correction happened earlier.
+
+## November 17, 2026: one-day remaining deadline for locked-dependency maintenance
+
+The [documented temporary deadline](maintenance-evidence/2026-11-17-deadline.md) preserves the last complete review date, November 8. For this interval only, the cadence is ten days and the next deadline is November 18. The known Tornado 6.6 advisory and incomplete review remain explicit. No lockfile, dependency declaration, validator, other maintenance area, live-service acceptance, or security result changes. The operator accepts this scheduling decision by merging the reviewed pull request.
