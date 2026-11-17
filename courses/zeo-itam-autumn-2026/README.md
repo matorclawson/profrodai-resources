@@ -1,4 +1,4 @@
-# ZEO ITAM · Autumn 2026 — practical track
+# ZEO ITAM · Autumn 2026
 
 Status: flagship companion track · **Runtime:** Python 3.10+ · **Cost:** free and offline
 
@@ -33,7 +33,7 @@ do not add employer data, credentials, student records, or a live model/API.
 
 The 15 October class notebook (an always-on agent for Lucy's shop, run in Colab) is in [labs/05-always-on-agent](labs/05-always-on-agent/README.md). It is not one of the four offline practicals above and is not part of `make verify`. It runs live models (Qwen and MiniLM in the notebook, Jev and Claude through your own keys), so it needs a Colab account, a GPU runtime is recommended, and the two hosted sections need keys that you add as Colab Secrets.
 
-The later class notebooks live beside it, one folder per class, each with its own README and Open in Colab links: [06 agent memory, 20 October](labs/06-agent-memory-2026-10-20/README.md), [07 one event, many memories, 26 October](labs/07-one-event-many-memories-2026-10-26/README.md). Thursday 29 October's notebook goes next to them as `08`. Like 05, they are not part of `make verify`.
+The later class notebooks live beside it, one folder per class, each with its own README and Open in Colab links: [06 agent memory, 20 October](labs/06-agent-memory-2026-10-20/README.md), [07 one event, many memories, 26 October](labs/07-one-event-many-memories-2026-10-26/README.md). Thursday 29 October's notebook goes next to them as `08`. The 17 November notebooks, [11 agentic ERP: planning, replanning and coordination](labs/11-agentic-erp-planning-2026-11-17/README.md), need Python 3.12+ and either your own OpenAI API key or the labelled offline test double. Like 05, they are not part of `make verify`.
 
 ## Prerequisites, runtime, safety, and cost
 
@@ -56,3 +56,9 @@ Run all four baseline demonstrations with `make run`; run every acceptance check
 Every result is text/JSON, untimed, and reproducible. A learner may explain a result in prose or a
 table. The invented Xolo scenarios are exercises in reasoning, not permission to automate a real
 workflow, inspect real ledgers, or expose personal data.
+
+## Current source scope
+
+The live semester has expanded beyond Class 1. This companion retains the manual-minutes baseline and before/after experiment; it does not claim to implement every published class or the complete semester.
+
+Source identity was reviewed against the pinned snapshot on November 9, 2026. This mapping review does not grant human pedagogical or accessibility approval.
