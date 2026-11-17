@@ -1,0 +1,14 @@
+llm:
+  model_group: itam-operator
+  max_prompt_tokens: 8000
+model_groups:
+  - id: itam-operator
+    models:
+      - provider: openai
+        model: gpt-6-luna
+        api_key: ${OPENAI_API_KEY}
+        reasoning_effort: none
+        max_tokens: 1024
+        num_retries: 0
+        timeout: 20
+channels: {}
