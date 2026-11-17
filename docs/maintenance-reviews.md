@@ -29,7 +29,7 @@ The overdue review was performed under the explicit approval of the maintainerâ€
 
 ## 2026-10-27: locked-dependencies (owner: maintainer)
 
-The review was due 2026-10-25 and was performed by the maintainer seat under the Architect's approval.
+The review was due 2026-10-25 and was performed under the approval recorded for that review.
 [Commands, raw-output hashes, the one change and limits](maintenance-evidence/2026-10-27.md) record the actual review. **One package changed:** `qs` 6.16.0 to 6.16.1 in `courses/agentic-coding-with-cursor/order-api/package-lock.json` only, for GHSA-6pq8-jhm2-2vcw (published 2026-10-27, first patched 6.16.1), inside Express's declared `qs ~6.16.0` range; `package.json` and `uv.lock` are unchanged and 6.17.0 was not taken. After the change `npm audit` reports zero vulnerabilities, all five API tests and TypeScript pass, and `uv lock --check` passes using CPython 3.12.13; the exact-version PyPI metadata check reports no vulnerability and no yanked locked release. No other bump is proposed. Only this maintainer-owned review date is renewed to 2026-10-27, due 2026-11-03; this is not a claim that all dependencies are latest or that all notebooks have been executed.
 
 
