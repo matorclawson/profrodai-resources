@@ -133,7 +133,7 @@ def propose_row(observation: PersistedObservation, *, erp_customer_id: str,
 
     known_private_chat is an operator review assertion, not a provider-derived
     chat-type claim. This creates a PROPOSAL; it authorizes no message or action.
-    Both readers and the Architect must approve the final map hash separately.
+    Two independent reviewers and the operator must approve the final map hash.
     """
     if known_private_chat is not True or observation.update.chat_id <= 0:
         raise FixtureRefused("REVIEWED_PRIVATE_CHAT_REQUIRED")
@@ -148,7 +148,7 @@ class ClassFixtureBinding:
     """Consume once against a separately approved immutable map.
 
     approved_sha256 must come from the trusted launcher after both readers and
-    Architect approval, never from the map itself or model input. The journal is
+    Operator approval, never from the map itself or model input. The journal is
     private persistent class state. A consumed update stays consumed on failure;
     no automatic retry, cursor reset or claim of ERP draft approval is provided.
     """
