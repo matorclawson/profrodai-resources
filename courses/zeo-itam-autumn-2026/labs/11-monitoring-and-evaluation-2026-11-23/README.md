@@ -9,6 +9,8 @@ Four notebooks for the ITAM class of 23 November 2026, all about Lucy's ice crea
 | `ITAM-03-Calibrating-an-LLM-Judge.ipynb` | 40 to 45 minutes. Write a grading rule with observable criteria and test a judge against reference decisions. |
 | `ITAM-04-Evaluating-a-Reservation-Agent.ipynb` | 45 to 55 minutes. Turn three business cases into a small evaluation suite and run two versions of the agent on identical cases. |
 
+When a notebook asks you to paste a model ID, use `gpt-5.6-terra`.
+
 ## Open in Colab
 
 These links name the `main` branch, so they work once this folder is merged:
